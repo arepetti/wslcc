@@ -1,0 +1,18 @@
+name: web-redis
+
+services:
+  web:
+    image: nginx:1.27
+    ports:
+      - "8080:80"
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+  redis:
+    image: redis:7
+    restart: unless-stopped
+
+networks:
+  default:
+    driver: bridge

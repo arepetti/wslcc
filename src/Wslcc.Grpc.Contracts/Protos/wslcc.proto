@@ -1,0 +1,111 @@
+syntax = "proto3";
+
+option csharp_namespace = "Wslcc.Grpc.Contracts";
+
+package wslcc.v1;
+
+// The daemon-facing service consumed by the CLI (and, later, the GUI).
+service Wslcc {
+  // Fast readiness/liveness check that does not touch providers.
+  rpc Ping (PingRequest) returns (PingResponse);
+
+  // Returns the daemon build version and info for each registered provider.
+  rpc GetVersion (GetVersionRequest) returns (GetVersionResponse);
+
+  // Requests a graceful shutdown of the daemon (used by `wslcc daemon stop`).
+  rpc Shutdown (ShutdownRequest) returns (ShutdownResponse);
+
+  // Compose lifecycle.
+  rpc Up (UpRequest) returns (UpResponse);
+  rpc Down (DownRequest) returns (DownResponse);
+  rpc Ps (PsRequest) returns (PsResponse);
+}
+
+message PingRequest {}
+
+message PingResponse {
+  string daemon_version = 1;
+  string default_provider = 2;
+}
+
+message GetVersionRequest {
+  // Optional provider name; empty means "all registered providers".
+  string provider = 1;
+}
+
+message ComponentVersion {
+  string name = 1;
+  string display_name = 2;
+  bool available = 3;
+  string version = 4;
+  string details = 5;
+}
+
+message GetVersionResponse {
+  string daemon_version = 1;
+  repeated ComponentVersion providers = 2;
+}
+
+message ShutdownRequest {}
+
+message ShutdownResponse {
+  bool accepted = 1;
+}
+
+// Shared fields for identifying a project. The daemon resolves the effective project name as:
+// explicit project_name, else the compose file's `name:`, else default_project_name.
+message ServiceResult {
+  string service = 1;
+  string container_id = 2;
+  string status = 3;
+  string error = 4;
+}
+
+message Container {
+  string id = 1;
+  string name = 2;
+  string image = 3;
+  string state = 4;
+  string status = 5;
+  string ports = 6;
+  string service = 7;
+  string project = 8;
+}
+
+message UpRequest {
+  string project_name = 1;
+  string default_project_name = 2;
+  string compose_yaml = 3;
+  string provider = 4;
+  bool pull = 5;
+}
+
+message UpResponse {
+  string project_name = 1;
+  repeated ServiceResult results = 2;
+}
+
+message DownRequest {
+  string project_name = 1;
+  string default_project_name = 2;
+  string compose_yaml = 3;
+  string provider = 4;
+}
+
+message DownResponse {
+  string project_name = 1;
+  repeated ServiceResult results = 2;
+}
+
+message PsRequest {
+  string project_name = 1;
+  string default_project_name = 2;
+  string compose_yaml = 3;
+  string provider = 4;
+  bool all = 5;
+}
+
+message PsResponse {
+  string project_name = 1;
+  repeated Container containers = 2;
+}

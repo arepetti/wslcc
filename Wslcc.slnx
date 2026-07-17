@@ -1,0 +1,18 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Wslcc.Abstractions/Wslcc.Abstractions.csproj" />
+    <Project Path="src/Wslcc.Cli/Wslcc.Cli.csproj" />
+    <Project Path="src/Wslcc.Client/Wslcc.Client.csproj" />
+    <Project Path="src/Wslcc.Core/Wslcc.Core.csproj" />
+    <Project Path="src/Wslcc.Grpc.Contracts/Wslcc.Grpc.Contracts.csproj" />
+    <Project Path="src/Wslcc.Grpc.Server/Wslcc.Grpc.Server.csproj" />
+    <Project Path="src/Wslcc.Providers.Common/Wslcc.Providers.Common.csproj" />
+    <Project Path="src/Wslcc.Providers.DockerCompose/Wslcc.Providers.DockerCompose.csproj" />
+    <Project Path="src/Wslcc.Providers.Wslc/Wslcc.Providers.Wslc.csproj" />
+    <Project Path="src/Wslccd/Wslccd.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Wslcc.Core.Tests/Wslcc.Core.Tests.csproj" />
+    <Project Path="tests/Wslcc.Providers.DockerCompose.Tests/Wslcc.Providers.DockerCompose.Tests.csproj" />
+  </Folder>
+</Solution>

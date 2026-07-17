@@ -1,0 +1,32 @@
+<Project>
+
+  <!-- App projects emit their bin output into a single shared folder (src/out), like a publish, so
+       wslcc.exe and wslccd.exe (and their dependencies) sit side by side. Test projects are excluded
+       so the runtime folder stays clean; they keep their default per-project bin. Intermediate output
+       (obj) always stays per-project. -->
+  <PropertyGroup Condition="!$(MSBuildProjectDirectory.Contains('$([System.IO.Path]::DirectorySeparatorChar)tests$([System.IO.Path]::DirectorySeparatorChar)'))">
+    <OutputPath>$(MSBuildThisFileDirectory)src\out\</OutputPath>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+
+    <Authors>Adriano Repetti</Authors>
+    <Company>Adriano Repetti</Company>
+    <Product>WSLCC</Product>
+    <Copyright>Copyright (c) Adriano Repetti</Copyright>
+    <PackageProjectUrl>https://github.com/arepetti002/wslcc</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/arepetti002/wslcc</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+
+    <VersionPrefix>0.1.0</VersionPrefix>
+  </PropertyGroup>
+
+</Project>
