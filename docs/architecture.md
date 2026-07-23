@@ -5,18 +5,20 @@ the daemon), and pluggable providers.
 
 ## Projects
 
-| Project | TFM | Role |
-| --- | --- | --- |
-| `Wslcc.Abstractions` | netstandard2.0 | Contracts and models: `IContainerProvider`, `IComposeEngine`, `ProviderInfo`, Compose model types, `ProcessRunner`. |
-| `Wslcc.Core` | netstandard2.0 | Provider-agnostic logic: Compose YAML parser and the orchestration engine (`ComposeEngine`). |
-| `Wslcc.Providers.Common` | net10.0 | Shared base (`CliContainerProviderBase`, `CliCommandBuilder`) for providers that drive a standard container CLI. |
-| `Wslcc.Providers.Wslc` | net10.0 | Provider for WSL containers. Container ops from the shared CLI base (`wslc`); version/availability via the SDK path (`Microsoft.WSL.Containers`) gated behind `WSLC_SDK`, with a `wslc.exe` fallback. |
-| `Wslcc.Providers.DockerCompose` | net10.0 | Provider that drives the `docker` CLI (container ops) and `docker compose version` (version). |
-| `Wslcc.Grpc.Contracts` | netstandard2.0 | `.proto` definitions and generated gRPC types shared by server and clients. |
-| `Wslcc.Grpc.Server` | net10.0 | gRPC service implementation calling the core engine. |
-| `Wslcc.Client` | net10.0 | Typed gRPC client + transport selection (named pipe / HTTP). Shared by the CLI and future GUI. |
-| `Wslccd` | net10.0 (exe) | The daemon: Kestrel + gRPC, Windows Service support, composition root. |
-| `Wslcc.Cli` | net10.0 (exe) | The `wslcc` command-line tool (Spectre.Console.Cli). |
+All projects target `net10.0` (see [CONTRIBUTING.md](../CONTRIBUTING.md) for the rationale).
+
+| Project | Role |
+| --- | --- |
+| `Wslcc.Abstractions` | Contracts and models: `IContainerProvider`, `IComposeEngine`, `ProviderInfo`, Compose model types, `ProcessRunner` (incl. streaming process output as `IAsyncEnumerable<string>`). |
+| `Wslcc.Core` | Provider-agnostic logic: Compose YAML parser and the orchestration engine (`ComposeEngine`). |
+| `Wslcc.Providers.Common` | Shared base (`CliContainerProviderBase`, `CliCommandBuilder`) for providers that drive a standard container CLI. |
+| `Wslcc.Providers.Wslc` | Provider for WSL containers. Container ops from the shared CLI base (`wslc`); version/availability via the SDK path (`Microsoft.WSL.Containers`) gated behind `WSLC_SDK`, with a `wslc.exe` fallback. |
+| `Wslcc.Providers.DockerCompose` | Provider that drives the `docker` CLI (container ops) and `docker compose version` (version). |
+| `Wslcc.Grpc.Contracts` | `.proto` definitions and generated gRPC types shared by server and clients. |
+| `Wslcc.Grpc.Server` | gRPC service implementation calling the core engine. |
+| `Wslcc.Client` | Typed gRPC client + transport selection (named pipe / HTTP). Shared by the CLI and future GUI. |
+| `Wslccd` (exe) | The daemon: Kestrel + gRPC, Windows Service support, composition root. |
+| `Wslcc.Cli` (exe) | The `wslcc` command-line tool (Spectre.Console.Cli). |
 
 ## Dependency direction
 
@@ -65,6 +67,13 @@ sequenceDiagram
 
 `Ping` is a fast readiness RPC that does not touch providers (used by `daemon start`/`status`), while
 `GetVersion` resolves each provider's underlying tool version and may shell out to `docker`/`wslc`.
+
+Every compose lifecycle RPC (`Up`, `Down`, `Ps`, `Start`, `Stop`, `Restart`, `Pull`, `Build`) is unary
+except `Logs`, which is server-streaming: the daemon fans in one `{exe} logs [--follow]` process per
+matching container (via `IContainerProvider.GetLogsAsync`, an `IAsyncEnumerable<string>`) into a single
+tagged stream, and the client reads it as an `IAsyncEnumerable<LogLine>`. Cancelling the call (client
+disconnect, or Ctrl+C in the CLI) kills the underlying processes so a `--follow` invocation stops
+promptly instead of leaking.
 
 ## Transport
 

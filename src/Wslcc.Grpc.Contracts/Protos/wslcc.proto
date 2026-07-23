@@ -19,6 +19,15 @@ service Wslcc {
   rpc Up (UpRequest) returns (UpResponse);
   rpc Down (DownRequest) returns (DownResponse);
   rpc Ps (PsRequest) returns (PsResponse);
+  rpc Start (StartRequest) returns (StartResponse);
+  rpc Stop (StopRequest) returns (StopResponse);
+  rpc Restart (RestartRequest) returns (RestartResponse);
+  rpc Pull (PullRequest) returns (PullResponse);
+  rpc Build (BuildRequest) returns (BuildResponse);
+
+  // Server-streaming: yields log lines as they are produced. When 'follow' is set the stream stays
+  // open until the client cancels the call (e.g. Ctrl+C) or every container stops.
+  rpc Logs (LogsRequest) returns (stream LogLine);
 }
 
 message PingRequest {}
@@ -108,4 +117,94 @@ message PsRequest {
 message PsResponse {
   string project_name = 1;
   repeated Container containers = 2;
+}
+
+message StartRequest {
+  string project_name = 1;
+  string default_project_name = 2;
+  string compose_yaml = 3;
+  string provider = 4;
+  // Optional service names to start; empty means "every service with an existing container".
+  repeated string services = 5;
+}
+
+message StartResponse {
+  string project_name = 1;
+  repeated ServiceResult results = 2;
+}
+
+message StopRequest {
+  string project_name = 1;
+  string default_project_name = 2;
+  string compose_yaml = 3;
+  string provider = 4;
+  // Optional service names to stop; empty means "every running service".
+  repeated string services = 5;
+}
+
+message StopResponse {
+  string project_name = 1;
+  repeated ServiceResult results = 2;
+}
+
+message RestartRequest {
+  string project_name = 1;
+  string default_project_name = 2;
+  string compose_yaml = 3;
+  string provider = 4;
+  // Optional service names to restart; empty means "every service with an existing container".
+  repeated string services = 5;
+}
+
+message RestartResponse {
+  string project_name = 1;
+  repeated ServiceResult results = 2;
+}
+
+message PullRequest {
+  string project_name = 1;
+  string default_project_name = 2;
+  string compose_yaml = 3;
+  string provider = 4;
+  // Optional service names to pull; empty means "every service with an image".
+  repeated string services = 5;
+}
+
+message PullResponse {
+  string project_name = 1;
+  repeated ServiceResult results = 2;
+}
+
+message BuildRequest {
+  string project_name = 1;
+  string default_project_name = 2;
+  string compose_yaml = 3;
+  string provider = 4;
+  // Optional service names to build; empty means "every service with a 'build:' section".
+  repeated string services = 5;
+  // Absolute directory containing the compose file, used to resolve relative build contexts.
+  string base_directory = 6;
+}
+
+message BuildResponse {
+  string project_name = 1;
+  repeated ServiceResult results = 2;
+}
+
+message LogsRequest {
+  string project_name = 1;
+  string default_project_name = 2;
+  string compose_yaml = 3;
+  string provider = 4;
+  // Optional service names to show logs for; empty means "every existing container".
+  repeated string services = 5;
+  // Keep the stream open and yield new lines as they are written.
+  bool follow = 6;
+  // Number of lines to show from the end of the logs; unset means "all".
+  optional int32 tail = 7;
+}
+
+message LogLine {
+  string service = 1;
+  string line = 2;
 }

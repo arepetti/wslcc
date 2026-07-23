@@ -19,9 +19,21 @@ wslcc daemon stop
 
 ### Windows Service
 
-The daemon uses `AddWindowsService`, so it can be registered with the Service Control Manager. Service
-install/uninstall helper commands are planned (see [todo.md](todo.md)); until then you can register the
-built executable manually with `sc.exe create`.
+The daemon uses `UseWindowsService`, so it can be registered with the Service Control Manager (service
+name `WSLCC Daemon`) and run without a signed-in user:
+
+```powershell
+wslcc daemon install               # sc create + description, startup type 'auto'
+wslcc daemon install --startup manual --start   # 'demand' startup, started immediately
+wslcc daemon uninstall              # sc stop + sc delete
+```
+
+Both commands shell out to `sc.exe` and require an elevated (Administrator) prompt. `install` locates
+`wslccd` the same way `daemon start` does (`WSLCCD_PATH`, or next to `wslcc.exe`), warns if a per-user
+daemon is already running (it would conflict with the service over the same named pipe), and accepts
+`--provider` to persist a default provider for the service the same way `daemon start --provider` does
+for a per-user process. `--startup auto|manual|disabled` maps to `sc`'s `auto`/`demand`/`disabled` start
+types.
 
 ## Configuration
 

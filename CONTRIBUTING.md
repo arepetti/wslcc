@@ -31,8 +31,7 @@ wslcc daemon stop
   [`Directory.Packages.props`](Directory.Packages.props); reference packages without a `Version`.
 - Shared build settings live in [`Directory.Build.props`](Directory.Build.props). Style is enforced
   via [`.editorconfig`](.editorconfig) (nullable enabled, file-scoped namespaces, 4-space indent).
-- Widely-reused libraries (`Wslcc.Abstractions`, `Wslcc.Grpc.Contracts`) target `netstandard2.0`; apps
-  and servers target `net10.0`.
+- Every project targets `net10.0` (no `netstandard2.0` compatibility is maintained).
 - The WSL SDK path is isolated behind the `WSLC_SDK` compile constant so the solution builds without
   the preview `Microsoft.WSL.Containers` package. Prefer that seam over sprinkling `#if` throughout.
 - Comments should explain intent/trade-offs, not restate the code.

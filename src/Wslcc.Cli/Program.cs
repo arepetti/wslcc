@@ -25,6 +25,18 @@ app.Configure(config =>
             .WithDescription("Stop and remove containers.");
         compose.AddCommand<ComposePsCommand>("ps")
             .WithDescription("List containers.");
+        compose.AddCommand<ComposeStartCommand>("start")
+            .WithDescription("Start existing (stopped) containers.");
+        compose.AddCommand<ComposeStopCommand>("stop")
+            .WithDescription("Stop containers without removing them.");
+        compose.AddCommand<ComposeRestartCommand>("restart")
+            .WithDescription("Restart containers.");
+        compose.AddCommand<ComposePullCommand>("pull")
+            .WithDescription("Pull service images.");
+        compose.AddCommand<ComposeBuildCommand>("build")
+            .WithDescription("Build or rebuild services.");
+        compose.AddCommand<ComposeLogsCommand>("logs")
+            .WithDescription("View output from containers.");
 
         // Remaining compose verbs are stubbed; implementations tracked in docs/todo.md.
         foreach (var (verb, description) in ComposeVerbs)
@@ -43,6 +55,10 @@ app.Configure(config =>
             .WithDescription("Stop the daemon gracefully.");
         daemon.AddCommand<DaemonStatusCommand>("status")
             .WithDescription("Report whether the daemon is running.");
+        daemon.AddCommand<DaemonInstallCommand>("install")
+            .WithDescription("Register wslccd as a Windows Service (requires Administrator).");
+        daemon.AddCommand<DaemonUninstallCommand>("uninstall")
+            .WithDescription("Remove the wslccd Windows Service (requires Administrator).");
     });
 });
 
@@ -52,12 +68,6 @@ partial class Program
 {
     private static readonly (string Verb, string Description)[] ComposeVerbs =
     [
-        ("logs", "View output from containers. (not implemented yet)"),
-        ("build", "Build or rebuild services. (not implemented yet)"),
-        ("pull", "Pull service images. (not implemented yet)"),
         ("config", "Parse, resolve and render the compose file. (not implemented yet)"),
-        ("start", "Start services. (not implemented yet)"),
-        ("stop", "Stop services. (not implemented yet)"),
-        ("restart", "Restart services. (not implemented yet)"),
     ];
 }

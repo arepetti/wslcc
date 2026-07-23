@@ -124,6 +124,151 @@ public sealed class WslccGrpcService : global::Wslcc.Grpc.Contracts.Wslcc.WslccB
         return response;
     }
 
+    public override async Task<StartResponse> Start(StartRequest request, ServerCallContext context)
+    {
+        var file = Parse(request.ComposeYaml);
+        var project = ProjectNames.ResolveOrNull(request.ProjectName, file, request.DefaultProjectName);
+        if (project is null)
+        {
+            throw new RpcException(new Status(
+                StatusCode.InvalidArgument,
+                "No project specified. Provide a compose file (-f) or a project name (-p)."));
+        }
+
+        var services = request.Services.Count > 0 ? request.Services.ToList() : null;
+        var results = await Guard(() =>
+            _engine.StartAsync(project, NullIfEmpty(request.Provider), services, context.CancellationToken))
+            .ConfigureAwait(false);
+
+        var response = new StartResponse { ProjectName = project };
+        response.Results.AddRange(results.Select(ToServiceResult));
+        return response;
+    }
+
+    public override async Task<StopResponse> Stop(StopRequest request, ServerCallContext context)
+    {
+        var file = Parse(request.ComposeYaml);
+        var project = ProjectNames.ResolveOrNull(request.ProjectName, file, request.DefaultProjectName);
+        if (project is null)
+        {
+            throw new RpcException(new Status(
+                StatusCode.InvalidArgument,
+                "No project specified. Provide a compose file (-f) or a project name (-p)."));
+        }
+
+        var services = request.Services.Count > 0 ? request.Services.ToList() : null;
+        var results = await Guard(() =>
+            _engine.StopAsync(project, NullIfEmpty(request.Provider), services, context.CancellationToken))
+            .ConfigureAwait(false);
+
+        var response = new StopResponse { ProjectName = project };
+        response.Results.AddRange(results.Select(ToServiceResult));
+        return response;
+    }
+
+    public override async Task<RestartResponse> Restart(RestartRequest request, ServerCallContext context)
+    {
+        var file = Parse(request.ComposeYaml);
+        var project = ProjectNames.ResolveOrNull(request.ProjectName, file, request.DefaultProjectName);
+        if (project is null)
+        {
+            throw new RpcException(new Status(
+                StatusCode.InvalidArgument,
+                "No project specified. Provide a compose file (-f) or a project name (-p)."));
+        }
+
+        var services = request.Services.Count > 0 ? request.Services.ToList() : null;
+        var results = await Guard(() =>
+            _engine.RestartAsync(project, NullIfEmpty(request.Provider), services, context.CancellationToken))
+            .ConfigureAwait(false);
+
+        var response = new RestartResponse { ProjectName = project };
+        response.Results.AddRange(results.Select(ToServiceResult));
+        return response;
+    }
+
+    public override async Task<PullResponse> Pull(PullRequest request, ServerCallContext context)
+    {
+        var file = Parse(request.ComposeYaml);
+        if (file is null)
+        {
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "No compose file content was provided."));
+        }
+
+        var project = ProjectNames.Resolve(request.ProjectName, file, request.DefaultProjectName);
+        var services = request.Services.Count > 0 ? request.Services.ToList() : null;
+
+        var results = await Guard(() =>
+            _engine.PullAsync(file, NullIfEmpty(request.Provider), services, context.CancellationToken))
+            .ConfigureAwait(false);
+
+        var response = new PullResponse { ProjectName = project };
+        response.Results.AddRange(results.Select(ToServiceResult));
+        return response;
+    }
+
+    public override async Task<BuildResponse> Build(BuildRequest request, ServerCallContext context)
+    {
+        var file = Parse(request.ComposeYaml);
+        if (file is null)
+        {
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "No compose file content was provided."));
+        }
+
+        var project = ProjectNames.Resolve(request.ProjectName, file, request.DefaultProjectName);
+        var services = request.Services.Count > 0 ? request.Services.ToList() : null;
+
+        var results = await Guard(() =>
+            _engine.BuildAsync(
+                project, file, NullIfEmpty(request.Provider), NullIfEmpty(request.BaseDirectory), services, context.CancellationToken))
+            .ConfigureAwait(false);
+
+        var response = new BuildResponse { ProjectName = project };
+        response.Results.AddRange(results.Select(ToServiceResult));
+        return response;
+    }
+
+    public override async Task Logs(
+        LogsRequest request,
+        IServerStreamWriter<LogLine> responseStream,
+        ServerCallContext context)
+    {
+        var file = Parse(request.ComposeYaml);
+        var project = ProjectNames.ResolveOrNull(request.ProjectName, file, request.DefaultProjectName);
+        if (project is null)
+        {
+            throw new RpcException(new Status(
+                StatusCode.InvalidArgument,
+                "No project specified. Provide a compose file (-f) or a project name (-p)."));
+        }
+
+        var services = request.Services.Count > 0 ? request.Services.ToList() : null;
+        int? tail = request.HasTail ? request.Tail : null;
+
+        try
+        {
+            var lines = _engine.GetLogsAsync(
+                project, NullIfEmpty(request.Provider), services, request.Follow, tail, context.CancellationToken);
+
+            await foreach (var line in lines.WithCancellation(context.CancellationToken).ConfigureAwait(false))
+            {
+                await responseStream.WriteAsync(new LogLine { Service = line.Service, Line = line.Line }).ConfigureAwait(false);
+            }
+        }
+        catch (OperationCanceledException) when (context.CancellationToken.IsCancellationRequested)
+        {
+            // The client stopped following (e.g. Ctrl+C) or disconnected; nothing more to send.
+        }
+        catch (ProviderException ex)
+        {
+            throw new RpcException(new Status(StatusCode.FailedPrecondition, ex.Message));
+        }
+        catch (InvalidOperationException ex)
+        {
+            throw new RpcException(new Status(StatusCode.FailedPrecondition, ex.Message));
+        }
+    }
+
     /// <summary>
     /// Runs an engine call and translates domain failures into meaningful gRPC statuses so the CLI can
     /// show the underlying reason (e.g. "docker engine not running") instead of an opaque "Unknown".

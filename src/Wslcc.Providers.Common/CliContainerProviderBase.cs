@@ -37,6 +37,12 @@ public abstract class CliContainerProviderBase : IContainerProvider
         EnsureSuccess(pull, $"pull image '{image}'");
     }
 
+    public async Task BuildImageAsync(ImageBuildSpec spec, CancellationToken cancellationToken = default)
+    {
+        var result = await TryRunAsync(CliCommandBuilder.BuildBuildArguments(spec), cancellationToken).ConfigureAwait(false);
+        EnsureSuccess(result, $"build image '{spec.Tag}'");
+    }
+
     public async Task<string> RunContainerAsync(ContainerRunSpec spec, CancellationToken cancellationToken = default)
     {
         var result = await TryRunAsync(CliCommandBuilder.BuildRunArguments(spec), cancellationToken).ConfigureAwait(false);
@@ -48,6 +54,18 @@ public abstract class CliContainerProviderBase : IContainerProvider
     {
         var result = await TryRunAsync(CliCommandBuilder.BuildStopArguments(container), cancellationToken).ConfigureAwait(false);
         EnsureSuccess(result, $"stop container '{container}'");
+    }
+
+    public async Task StartContainerAsync(string container, CancellationToken cancellationToken = default)
+    {
+        var result = await TryRunAsync(CliCommandBuilder.BuildStartArguments(container), cancellationToken).ConfigureAwait(false);
+        EnsureSuccess(result, $"start container '{container}'");
+    }
+
+    public async Task RestartContainerAsync(string container, CancellationToken cancellationToken = default)
+    {
+        var result = await TryRunAsync(CliCommandBuilder.BuildRestartArguments(container), cancellationToken).ConfigureAwait(false);
+        EnsureSuccess(result, $"restart container '{container}'");
     }
 
     public async Task RemoveContainerAsync(string container, bool force, CancellationToken cancellationToken = default)
@@ -67,6 +85,13 @@ public abstract class CliContainerProviderBase : IContainerProvider
         EnsureSuccess(result, "list containers");
         return ParsePs(result!.StandardOutput);
     }
+
+    public IAsyncEnumerable<string> GetLogsAsync(
+        string container,
+        bool follow,
+        int? tail,
+        CancellationToken cancellationToken = default)
+        => ProcessRunner.StreamLinesAsync(Executable, CliCommandBuilder.BuildLogsArguments(container, follow, tail), cancellationToken);
 
     private Task<ProcessResult?> TryRunAsync(string arguments, CancellationToken cancellationToken)
         => ProcessRunner.TryRunAsync(Executable, arguments, cancellationToken);

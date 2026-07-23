@@ -1,4 +1,6 @@
 using System.Net.Http;
+using System.Runtime.CompilerServices;
+using Grpc.Core;
 using Grpc.Net.Client;
 using Wslcc.Grpc.Contracts;
 
@@ -58,6 +60,43 @@ public sealed class WslccClient : IDisposable
     public async Task<PsResponse> PsAsync(PsRequest request, CancellationToken cancellationToken = default)
     {
         return await _client.PsAsync(request, cancellationToken: cancellationToken);
+    }
+
+    public async Task<StartResponse> StartAsync(StartRequest request, CancellationToken cancellationToken = default)
+    {
+        return await _client.StartAsync(request, cancellationToken: cancellationToken);
+    }
+
+    public async Task<StopResponse> StopAsync(StopRequest request, CancellationToken cancellationToken = default)
+    {
+        return await _client.StopAsync(request, cancellationToken: cancellationToken);
+    }
+
+    public async Task<RestartResponse> RestartAsync(RestartRequest request, CancellationToken cancellationToken = default)
+    {
+        return await _client.RestartAsync(request, cancellationToken: cancellationToken);
+    }
+
+    public async Task<PullResponse> PullAsync(PullRequest request, CancellationToken cancellationToken = default)
+    {
+        return await _client.PullAsync(request, cancellationToken: cancellationToken);
+    }
+
+    public async Task<BuildResponse> BuildAsync(BuildRequest request, CancellationToken cancellationToken = default)
+    {
+        return await _client.BuildAsync(request, cancellationToken: cancellationToken);
+    }
+
+    /// <summary>Streams log lines from the server. Cancel <paramref name="cancellationToken"/> to stop following.</summary>
+    public async IAsyncEnumerable<LogLine> GetLogsAsync(
+        LogsRequest request,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        using var call = _client.Logs(request, cancellationToken: cancellationToken);
+        await foreach (var line in call.ResponseStream.ReadAllAsync(cancellationToken).ConfigureAwait(false))
+        {
+            yield return line;
+        }
     }
 
     public void Dispose() => _channel.Dispose();

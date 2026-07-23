@@ -61,4 +61,59 @@ public sealed class CliCommandBuilderTests
         Assert.Contains("label=wslcc.project", args);
         Assert.DoesNotContain("--all", args);
     }
+
+    [Fact]
+    public void BuildStartArguments_targets_the_container()
+    {
+        var args = CliCommandBuilder.BuildStartArguments("proj-web");
+
+        Assert.Equal("start proj-web", args);
+    }
+
+    [Fact]
+    public void BuildRestartArguments_targets_the_container()
+    {
+        var args = CliCommandBuilder.BuildRestartArguments("proj-web");
+
+        Assert.Equal("restart proj-web", args);
+    }
+
+    [Fact]
+    public void BuildBuildArguments_includes_tag_dockerfile_target_and_args_with_context_last()
+    {
+        var spec = new ImageBuildSpec { Context = "./web", Dockerfile = "Dockerfile.dev", Target = "prod", Tag = "proj-web" };
+        spec.Args["VERSION"] = "1.2.3";
+
+        var args = CliCommandBuilder.BuildBuildArguments(spec);
+
+        Assert.StartsWith("build", args);
+        Assert.Contains("-t proj-web", args);
+        Assert.Contains("-f Dockerfile.dev", args);
+        Assert.Contains("--target prod", args);
+        Assert.Contains("--build-arg VERSION=1.2.3", args);
+        Assert.EndsWith("./web", args);
+    }
+
+    [Fact]
+    public void BuildBuildArguments_throws_when_no_context()
+    {
+        var spec = new ImageBuildSpec { Tag = "proj-web" };
+        Assert.Throws<ProviderException>(() => CliCommandBuilder.BuildBuildArguments(spec));
+    }
+
+    [Fact]
+    public void BuildLogsArguments_includes_follow_and_tail()
+    {
+        var args = CliCommandBuilder.BuildLogsArguments("proj-web", follow: true, tail: 50);
+
+        Assert.Equal("logs --follow --tail 50 proj-web", args);
+    }
+
+    [Fact]
+    public void BuildLogsArguments_omits_follow_and_tail_when_not_requested()
+    {
+        var args = CliCommandBuilder.BuildLogsArguments("proj-web", follow: false, tail: null);
+
+        Assert.Equal("logs proj-web", args);
+    }
 }

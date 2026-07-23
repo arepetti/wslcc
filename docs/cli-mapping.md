@@ -11,11 +11,13 @@ WSLCC-specific commands. `wslcc compose ps` is the same token count as `docker c
 | `docker compose up` | `wslcc compose up` | Implemented (detached; `-f`, `-p`, `--pull`) |
 | `docker compose down` | `wslcc compose down` | Implemented (`-f`, `-p`) |
 | `docker compose ps` | `wslcc compose ps` | Implemented (`-f`, `-p`, `-a`) |
-| `docker compose logs` | `wslcc compose logs` | Stub (see [todo.md](todo.md)) |
-| `docker compose build` | `wslcc compose build` | Stub |
-| `docker compose pull` | `wslcc compose pull` | Stub |
+| `docker compose start` | `wslcc compose start` | Implemented (`-f`, `-p`, `[SERVICES]`) |
+| `docker compose stop` | `wslcc compose stop` | Implemented (`-f`, `-p`, `[SERVICES]`) |
+| `docker compose restart` | `wslcc compose restart` | Implemented (`-f`, `-p`, `[SERVICES]`) |
+| `docker compose pull` | `wslcc compose pull` | Implemented (`-f`, `-p`, `[SERVICES]`) |
+| `docker compose build` | `wslcc compose build` | Implemented (`-f`, `-p`, `[SERVICES]`) |
+| `docker compose logs` | `wslcc compose logs` | Implemented (`-f`, `-p`, `[SERVICES]`, `--follow`, `--tail`) |
 | `docker compose config` | `wslcc compose config` | Stub |
-| `docker compose start/stop/restart` | `wslcc compose start/stop/restart` | Stub |
 
 ## WSLCC-specific commands
 
@@ -26,10 +28,12 @@ WSLCC-specific commands. `wslcc compose ps` is the same token count as `docker c
 | `wslcc daemon start [--provider <name>]` | Launch the local daemon and wait until ready. `--provider` sets the daemon's default provider so other commands don't need to repeat it. |
 | `wslcc daemon stop` | Stop the daemon gracefully. |
 | `wslcc daemon status` | Report whether the daemon is running. |
+| `wslcc daemon install [--startup auto\|manual\|disabled] [--start] [--provider <name>]` | Register `wslccd` as a Windows Service (requires Administrator). |
+| `wslcc daemon uninstall` | Stop and remove the `wslccd` Windows Service (requires Administrator). |
 
 ## Compose command options
 
-Applied to `up`, `down`, and `ps`:
+Applied to `up`, `down`, `ps`, `start`, `stop`, `restart`, `pull`, `build`, and `logs`:
 
 | Option | Description |
 | --- | --- |
@@ -37,11 +41,26 @@ Applied to `up`, `down`, and `ps`:
 | `-p`, `--project-name <name>` | Project name. Defaults to the file's `name:` or the directory name. Containers are named `<project>-<service>` and labelled `wslcc.project` / `wslcc.service`. |
 | `--pull` | (`up`) Always pull images before starting. |
 | `-a`, `--all` | (`ps`) Include stopped containers. |
+| `[SERVICES]` | (`start`, `stop`, `restart`, `pull`, `build`, `logs`) Optional service names to target. Defaults to every matching service. |
+| `--follow` | (`logs`) Keep streaming new log output; stop with Ctrl+C. No `-f` short form since `-f` is already `--file`. |
+| `--tail <n>` | (`logs`) Show only the last `n` lines per container. Defaults to all. |
 
-> `up` currently runs detached; foreground/attached log streaming is tracked in [todo.md](todo.md).
+> `up` currently runs detached; foreground/attached log streaming for `up` itself is tracked in
+> [todo.md](todo.md) (use `wslcc compose logs --follow` separately in the meantime).
 
 > `ps` with no `-f`/`-p` lists **all** wslcc-managed containers across projects (with a Project column);
-> supply `-f` or `-p` to scope to one project. `down` always requires a project (`-f` or `-p`).
+> supply `-f` or `-p` to scope to one project. `down`, `start`, `stop`, `restart`, and `logs` always
+> require a project (`-f` or `-p`). `pull` and `build` (like `up`) require a compose file, since they
+> read service images / build contexts from it.
+
+> `build` tags the built image as `<project>-<service>` unless the service also specifies `image:`, in
+> which case that name is used. Relative `build.context` paths are resolved against the compose file's
+> directory (sent to the daemon as `base_directory`), so `wslcc compose build` works correctly even when
+> the daemon is a separate long-running process with a different current directory.
+
+> `logs` merges output from every matching container (like `docker compose logs`), tagging each line
+> with its service name (`<service> | <line>`). It uses a server-streaming RPC, so `--follow` keeps the
+> connection open and yields new lines as they're written; press Ctrl+C to stop.
 
 ## Global options
 

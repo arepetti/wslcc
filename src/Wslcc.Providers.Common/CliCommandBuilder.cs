@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using Wslcc.Abstractions;
 
@@ -93,12 +94,74 @@ public static class CliCommandBuilder
 
     public static string BuildPullArguments(string image) => Join(new[] { "pull", image });
 
+    public static string BuildBuildArguments(ImageBuildSpec spec)
+    {
+        if (string.IsNullOrWhiteSpace(spec.Context))
+        {
+            throw new ProviderException("No build context specified.");
+        }
+
+        var args = new List<string> { "build" };
+
+        if (!string.IsNullOrWhiteSpace(spec.Tag))
+        {
+            args.Add("-t");
+            args.Add(spec.Tag);
+        }
+
+        if (!string.IsNullOrWhiteSpace(spec.Dockerfile))
+        {
+            args.Add("-f");
+            args.Add(spec.Dockerfile!);
+        }
+
+        if (!string.IsNullOrWhiteSpace(spec.Target))
+        {
+            args.Add("--target");
+            args.Add(spec.Target!);
+        }
+
+        foreach (var arg in spec.Args)
+        {
+            args.Add("--build-arg");
+            args.Add(arg.Value is null ? arg.Key : $"{arg.Key}={arg.Value}");
+        }
+
+        args.Add(spec.Context);
+
+        return Join(args);
+    }
+
     public static string BuildImageInspectArguments(string image) => Join(new[] { "image", "inspect", image });
 
     public static string BuildStopArguments(string container) => Join(new[] { "stop", container });
 
+    public static string BuildStartArguments(string container) => Join(new[] { "start", container });
+
+    public static string BuildRestartArguments(string container) => Join(new[] { "restart", container });
+
     public static string BuildRemoveArguments(string container, bool force)
         => force ? Join(new[] { "rm", "-f", container }) : Join(new[] { "rm", container });
+
+    public static string BuildLogsArguments(string container, bool follow, int? tail)
+    {
+        var args = new List<string> { "logs" };
+
+        if (follow)
+        {
+            args.Add("--follow");
+        }
+
+        if (tail is { } n)
+        {
+            args.Add("--tail");
+            args.Add(n.ToString(CultureInfo.InvariantCulture));
+        }
+
+        args.Add(container);
+
+        return Join(args);
+    }
 
     internal static string Join(IEnumerable<string> args)
         => string.Join(" ", args.Select(Quote));

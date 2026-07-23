@@ -10,8 +10,9 @@ using Wslccd;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Allow running either as a Windows Service or as a normal per-user process.
-builder.Host.UseWindowsService(options => options.ServiceName = "WSLCC Daemon");
+// Allow running either as a Windows Service or as a normal per-user process. The service name must
+// match Wslcc.Cli's 'daemon install'/'uninstall' commands (see WslccdConstants).
+builder.Host.UseWindowsService(options => options.ServiceName = WslccdConstants.ServiceName);
 
 var options = new DaemonOptions();
 builder.Configuration.GetSection(DaemonOptions.SectionName).Bind(options);
