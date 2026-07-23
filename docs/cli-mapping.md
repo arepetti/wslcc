@@ -17,7 +17,7 @@ WSLCC-specific commands. `wslcc compose ps` is the same token count as `docker c
 | `docker compose pull` | `wslcc compose pull` | Implemented (`-f`, `-p`, `[SERVICES]`) |
 | `docker compose build` | `wslcc compose build` | Implemented (`-f`, `-p`, `[SERVICES]`) |
 | `docker compose logs` | `wslcc compose logs` | Implemented (`-f`, `-p`, `[SERVICES]`, `--follow`, `--tail`) |
-| `docker compose config` | `wslcc compose config` | Stub |
+| `docker compose config` | `wslcc compose config` | Implemented (`--format`, `--services`, `--volumes`, `--images`, `--profiles`, `--hash`, `--no-interpolate`, `-q`, `-o`) |
 
 ## WSLCC-specific commands
 
@@ -33,7 +33,7 @@ WSLCC-specific commands. `wslcc compose ps` is the same token count as `docker c
 
 ## Compose command options
 
-Applied to `up`, `down`, `ps`, `start`, `stop`, `restart`, `pull`, `build`, and `logs`:
+Applied to `up`, `down`, `ps`, `start`, `stop`, `restart`, `pull`, `build`, `logs`, and `config`:
 
 | Option | Description |
 | --- | --- |
@@ -47,6 +47,15 @@ Applied to `up`, `down`, `ps`, `start`, `stop`, `restart`, `pull`, `build`, and 
 | `[SERVICES]` | (`start`, `stop`, `restart`, `pull`, `build`, `logs`) Optional service names to target. Defaults to every matching service. |
 | `--follow` | (`logs`) Keep streaming new log output; stop with Ctrl+C. No `-f` short form since `-f` is already `--file`. |
 | `--tail <n>` | (`logs`) Show only the last `n` lines per container. Defaults to all. |
+| `--format <fmt>` | (`config`) Output format for the full document: `yaml` (default) or `json`. |
+| `--services` | (`config`) Print the enabled service names, one per line, instead of the full document. |
+| `--volumes` | (`config`) Print the declared volume names instead of the full document. |
+| `--images` | (`config`) Print the distinct service image references instead of the full document. |
+| `--profiles` | (`config`) Print the profile names declared across services (all of them, before filtering). |
+| `--hash <services>` | (`config`) Print a per-service config hash. Use `*` for all services or a comma-separated list. |
+| `--no-interpolate` | (`config`) Leave `${VAR}` references verbatim (files are still merged, `extends` resolved, profiles filtered). |
+| `-q`, `--quiet` | (`config`) Validate only: resolve the configuration and print nothing on success. |
+| `-o`, `--output <path>` | (`config`) Write the resolved document to a file instead of stdout. |
 
 > The compose file is resolved on the client before anything is sent to the daemon: `-f` files are
 > merged, `.env` is loaded, `${VAR}` references are interpolated, `extends` is resolved, and services
@@ -68,6 +77,17 @@ Applied to `up`, `down`, `ps`, `start`, `stop`, `restart`, `pull`, `build`, and 
 > `logs` merges output from every matching container (like `docker compose logs`), tagging each line
 > with its service name (`<service> | <line>`). It uses a server-streaming RPC, so `--follow` keeps the
 > connection open and yields new lines as they're written; press Ctrl+C to stop.
+
+> `config` runs **entirely client-side** and needs no daemon: it performs the same client resolution the
+> other verbs do (multi-file merge, `.env`, `${VAR}` interpolation, `extends`, profile filtering) and
+> prints the resulting document — i.e. exactly what would be sent to `wslccd`, plus the effective project
+> name as a leading `name:`. The document is written to `stdout` (or `-o <path>`); resolver warnings go to
+> `stderr` so a redirected/piped document stays clean. `extends` and profile-gated services are already
+> resolved, so the output has no `extends:` keys and only the services active for the selected profiles.
+> `--profiles` is the exception — it reports every declared profile, including those not active. The
+> `--hash` digest is a wslcc-specific SHA-256 of the canonical per-service config (for change detection),
+> not Docker Compose's own hash. `--resolve-image-digests` is not implemented, since `config` is offline
+> and pinning digests needs registry access.
 
 ## Global options
 

@@ -14,6 +14,7 @@ public static class YamlGraph
 {
     private static readonly IDeserializer Deserializer = new DeserializerBuilder().Build();
     private static readonly ISerializer Serializer = new SerializerBuilder().Build();
+    private static readonly ISerializer JsonSerializer = new SerializerBuilder().JsonCompatible().Build();
 
     /// <summary>Deserializes YAML into a normalized graph (mappings keyed by ordinal strings).</summary>
     public static object? Deserialize(string yaml)
@@ -29,6 +30,13 @@ public static class YamlGraph
     }
 
     public static string Serialize(object? graph) => Serializer.Serialize(graph ?? new Dictionary<string, object?>());
+
+    /// <summary>
+    /// Serializes the graph as JSON. Scalars are emitted as strings (the generic graph does not track
+    /// YAML scalar types), so this is a JSON mirror of the resolved document rather than a fully
+    /// type-inferred model.
+    /// </summary>
+    public static string SerializeJson(object? graph) => JsonSerializer.Serialize(graph ?? new Dictionary<string, object?>());
 
     public static Dictionary<string, object?>? AsMap(object? node) => node as Dictionary<string, object?>;
 

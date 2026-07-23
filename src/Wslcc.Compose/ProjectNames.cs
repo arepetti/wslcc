@@ -1,9 +1,9 @@
 using System.Text;
 using Wslcc.Abstractions.Compose;
 
-namespace Wslcc.Core;
+namespace Wslcc.Compose;
 
-/// <summary>Resolves and sanitizes Compose project names.</summary>
+/// <summary>Resolves and sanitizes Compose project names. Shared by the CLI and the daemon.</summary>
 public static class ProjectNames
 {
     /// <summary>

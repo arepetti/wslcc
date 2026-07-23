@@ -31,7 +31,15 @@ All notable changes to this project are documented here. The format is based on
   - **`profiles`**: new repeatable `--profile` option, `COMPOSE_PROFILES`, and auto-activation by naming a service that carries the profile on the command line; services gated by an inactive profile are dropped and dangling `depends_on` references pruned.
   - **`--project-directory`**: sets the default `.env` location, the relative `build.context` base, and the default project name (defaults to the first compose file's directory).
   - The daemon still parses the resolved YAML over the unchanged `compose_yaml` field (with the parser that now also lives in `Wslcc.Compose`), so it never needs the client's files or environment. New `Wslcc.Compose.Tests` project covers these features.
+- `compose config`: renders the fully-resolved Compose document produced by the client resolver — the exact YAML the other verbs send to the daemon, with the effective project name added as a leading `name:` — and runs **entirely client-side** (no daemon required). Options:
+  - `--format yaml|json` (default `yaml`) picks the output format for the full document.
+  - `--services`/`--volumes`/`--images` print just those names; `--profiles` lists every declared profile (collected before profile filtering, so profile-gated services still contribute).
+  - `--hash "*"|<svc,...>` prints a per-service config hash (a wslcc-specific SHA-256 of the canonical service config, for change detection).
+  - `--no-interpolate` leaves `${VAR}` references verbatim (files are still merged, `extends` resolved, profiles filtered).
+  - `-q|--quiet` validates only; `-o|--output <path>` writes to a file.
+  - The document goes to `stdout` and resolver warnings to `stderr`, so a redirected/piped document stays clean. `--resolve-image-digests` is intentionally not implemented (it needs registry access, which the offline client-side `config` does not have). This was the last stubbed `compose` verb; the placeholder stub command has been removed.
 
 ### Changed
 - Consolidated Compose parsing into a single library: the tolerant `ComposeFileParser` moved from `Wslcc.Core` to `Wslcc.Compose` (now referenced by `Wslcc.Grpc.Server`), so client resolution and daemon parsing share one YAML parser. `Wslcc.Core` no longer depends on `YamlDotNet`.
+- Moved project-name resolution (`ProjectNames`) from `Wslcc.Core` to `Wslcc.Compose` so the CLI (for `compose config`'s synthesized `name:`) and the daemon share one implementation instead of duplicating the precedence/sanitization rules.
 - Dropped `netstandard2.0` support: every project (including `Wslcc.Abstractions`, `Wslcc.Core`, and `Wslcc.Grpc.Contracts`) now targets `net10.0` only, removing the `Microsoft.Bcl.AsyncInterfaces`/`System.Threading.Channels` polyfills and the `IsExternalInit` shim now that `IAsyncEnumerable`, `Channel<T>`, and `init` accessors are natively available.

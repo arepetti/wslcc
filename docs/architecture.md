@@ -10,8 +10,8 @@ All projects target `net10.0` (see [CONTRIBUTING.md](../CONTRIBUTING.md) for the
 | Project | Role |
 | --- | --- |
 | `Wslcc.Abstractions` | Contracts and models: `IContainerProvider`, `IComposeEngine`, `ProviderInfo`, Compose model types, `ProcessRunner` (incl. streaming process output as `IAsyncEnumerable<string>`). |
-| `Wslcc.Compose` | All Compose file handling: the tolerant YAML parser (`ComposeFileParser` → typed model) plus client-side resolution (`ComposeLoader`): multi-file merge, `.env`, `${VAR}` interpolation, `extends`, and profile filtering. Used by the CLI (resolution) and the daemon (parsing). |
-| `Wslcc.Core` | Provider-agnostic orchestration: the engine (`ComposeEngine`) and project-name resolution (`ProjectNames`). |
+| `Wslcc.Compose` | All Compose file handling: the tolerant YAML parser (`ComposeFileParser` → typed model), client-side resolution (`ComposeLoader`): multi-file merge, `.env`, `${VAR}` interpolation, `extends`, and profile filtering, and project-name resolution (`ProjectNames`). Used by the CLI (resolution) and the daemon (parsing). |
+| `Wslcc.Core` | Provider-agnostic orchestration: the engine (`ComposeEngine`). |
 | `Wslcc.Providers.Common` | Shared base (`CliContainerProviderBase`, `CliCommandBuilder`) for providers that drive a standard container CLI. |
 | `Wslcc.Providers.Wslc` | Provider for WSL containers. Container ops from the shared CLI base (`wslc`); version/availability via the SDK path (`Microsoft.WSL.Containers`) gated behind `WSLC_SDK`, with a `wslc.exe` fallback. |
 | `Wslcc.Providers.DockerCompose` | Provider that drives the `docker` CLI (container ops) and `docker compose version` (version). |

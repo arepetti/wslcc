@@ -37,12 +37,8 @@ app.Configure(config =>
             .WithDescription("Build or rebuild services.");
         compose.AddCommand<ComposeLogsCommand>("logs")
             .WithDescription("View output from containers.");
-
-        // Remaining compose verbs are stubbed; implementations tracked in docs/todo.md.
-        foreach (var (verb, description) in ComposeVerbs)
-        {
-            compose.AddCommand<ComposeStubCommand>(verb).WithDescription(description);
-        }
+        compose.AddCommand<ComposeConfigCommand>("config")
+            .WithDescription("Parse, resolve and render the compose configuration.");
     });
 
     config.AddBranch<BranchSettings>("daemon", daemon =>
@@ -63,11 +59,3 @@ app.Configure(config =>
 });
 
 return await app.RunAsync(args);
-
-partial class Program
-{
-    private static readonly (string Verb, string Description)[] ComposeVerbs =
-    [
-        ("config", "Parse, resolve and render the compose file. (not implemented yet)"),
-    ];
-}

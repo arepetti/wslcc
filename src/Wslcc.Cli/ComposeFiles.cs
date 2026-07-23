@@ -4,7 +4,12 @@ using Wslcc.Compose;
 namespace Wslcc.Cli;
 
 /// <summary>Resolved Compose file inputs to send to the daemon.</summary>
-internal sealed record ComposeInputs(string Yaml, string DefaultProjectName, string ProjectDirectory, IReadOnlyList<string> Warnings);
+internal sealed record ComposeInputs(
+    string Yaml,
+    string DefaultProjectName,
+    string ProjectDirectory,
+    IReadOnlyList<string> Warnings,
+    IReadOnlyList<string> DeclaredProfiles);
 
 /// <summary>
 /// Locates the Compose file(s) (explicit <c>--file</c>, <c>COMPOSE_FILE</c>, or conventional names) and
@@ -19,21 +24,24 @@ internal static class ComposeFiles
     /// <c>null</c> when no compose file was found or specified); returns <c>false</c> with a rendered
     /// <paramref name="error"/> when resolution failed (bad YAML, unset required variable, ...).
     /// <paramref name="targetedServices"/> are the services named on the command line, whose profiles are
-    /// auto-activated.
+    /// auto-activated. Set <paramref name="printWarnings"/> to <c>false</c> to keep <c>stdout</c> clean
+    /// (e.g. <c>compose config</c>); warnings remain available via <see cref="ComposeInputs.Warnings"/>.
     /// </summary>
     public static bool TryResolve(
         ComposeCommandSettings settings,
         out ComposeInputs? inputs,
         out string error,
-        IReadOnlyList<string>? targetedServices = null)
+        IReadOnlyList<string>? targetedServices = null,
+        bool printWarnings = true,
+        bool interpolate = true)
     {
         inputs = null;
         error = string.Empty;
 
         try
         {
-            inputs = Resolve(settings, targetedServices ?? Array.Empty<string>());
-            if (inputs is not null)
+            inputs = Resolve(settings, targetedServices ?? Array.Empty<string>(), interpolate);
+            if (inputs is not null && printWarnings)
             {
                 foreach (var warning in inputs.Warnings)
                 {
@@ -50,7 +58,7 @@ internal static class ComposeFiles
         }
     }
 
-    private static ComposeInputs? Resolve(ComposeCommandSettings settings, IReadOnlyList<string> targetedServices)
+    private static ComposeInputs? Resolve(ComposeCommandSettings settings, IReadOnlyList<string> targetedServices, bool interpolate)
     {
         var cwd = Directory.GetCurrentDirectory();
         var projectDirectory = string.IsNullOrWhiteSpace(settings.ProjectDirectory) ? null : Path.GetFullPath(settings.ProjectDirectory);
@@ -69,6 +77,7 @@ internal static class ComposeFiles
             EnvFilePath = string.IsNullOrWhiteSpace(settings.EnvFile) ? null : Path.GetFullPath(settings.EnvFile),
             ProjectDirectory = projectDirectory,
             WorkingDirectory = cwd,
+            Interpolate = interpolate,
         });
 
         var defaultProjectName = new DirectoryInfo(result.ProjectDirectory).Name;
@@ -77,7 +86,7 @@ internal static class ComposeFiles
             defaultProjectName = "wslcc";
         }
 
-        return new ComposeInputs(result.ResolvedYaml, defaultProjectName, result.ProjectDirectory, result.Warnings);
+        return new ComposeInputs(result.ResolvedYaml, defaultProjectName, result.ProjectDirectory, result.Warnings, result.DeclaredProfiles);
     }
 
     private static IReadOnlyDictionary<string, string> ProcessEnvironment()

@@ -12,39 +12,32 @@ Tracked, intentionally-deferred work. See [roadmap.md](roadmap.md) for the big p
 
 ## Compose engine
 
-- `up`, `down`, `ps`, `start`, `stop`, `restart`, `pull`, `build`, and `logs` are implemented
-  (container-level orchestration driven by the engine, so the same code path works for both `docker`
-  and `wslc`). Remaining stubbed verb: `config`.
-- `start`/`stop`/`restart`/`logs` operate on already-created containers only (via
-  `ListContainersAsync`); they do not honor `depends_on` ordering the way `up`/`down` do, and requesting
-  an unknown service name is silently a no-op rather than an error. `pull`/`build` have the same
-  "unknown service name is ignored" limitation, but read from the compose file directly rather than
-  from existing containers.
-- `up` still requires services to specify an `image:`; it does not auto-build `build:`-only services
-  (that always fails with "building images is not supported yet"). Run `wslcc compose build` first, or
-  teach `up` to build automatically when an image is missing and a `build:` section is present.
-- `up` runs detached only; add foreground/attached mode with streamed logs (`Logs` is now
-  server-streaming, so `Up`/`Down`/`Ps`/`Start`/`Stop`/`Restart`/`Pull`/`Build` are the remaining unary
-  RPCs — consider streaming their per-service progress too instead of returning a single batch result).
-- `logs --tail`/`--follow` map directly to the provider CLI's own flags; there is no `--timestamps`,
-  `--no-color`, or `--since` yet, and lines from multiple containers are interleaved as they arrive
-  rather than sorted by timestamp.
-- Recreate policy: `up` currently always recreates existing containers by name; add change-detection
-  so unchanged services are left running.
+- `config --resolve-image-digests`: pin each service image to its `repo@sha256:...` digest. Deferred
+  because `config` runs offline/client-side and resolving digests needs registry access (would require a
+  registry client or routing through the daemon/provider).
+- `start`/`stop`/`restart`/`logs` operate on already-created containers only and do not honor
+  `depends_on` ordering the way `up`/`down` do; requesting an unknown service name is silently a no-op
+  rather than an error (`pull`/`build` share the "unknown service name is ignored" gap). Honor ordering
+  and reject unknown service names.
+- Auto-build for `up`: `up` requires services to specify an `image:` and fails on `build:`-only services
+  ("building images is not supported yet"). Build automatically when an image is missing and a `build:`
+  section is present (today you must run `wslcc compose build` first).
+- Foreground/attached `up`: `up` runs detached only; add an attached mode with streamed logs. Also
+  consider streaming per-service progress for the remaining unary RPCs
+  (`Up`/`Down`/`Ps`/`Start`/`Stop`/`Restart`/`Pull`/`Build`) instead of returning a single batch result.
+- `logs`: add `--timestamps`, `--no-color`, and `--since`, and sort the merged multi-container output by
+  timestamp (today lines are interleaved as they arrive).
+- Recreate policy: `up` always recreates existing containers by name; add change-detection so unchanged
+  services are left running.
 - Honor `depends_on` conditions (`service_healthy`, `service_completed_successfully`) and healthchecks;
   today ordering is start-order only.
 - Networks and volumes: create/attach project networks and named volumes (currently ignored).
 
 ## Compose file fidelity
 
-- Variable interpolation (`${VAR}` / `.env`), multi-file merge/override (Compose per-attribute merge
-  rules), `extends` (with non-extendable-key rejection), and `profiles` (including auto-activation by
-  targeted service, `COMPOSE_PROFILES`, `--project-directory`, and `COMPOSE_FILE`) are implemented
-  client-side in `Wslcc.Compose.ComposeLoader` (the CLI resolves the project into one document before
-  sending it to the daemon). Remaining fidelity gaps in those features:
-  - `.env` parsing is a small subset (no multiline values or in-value expansion).
-  - Merge dedups exact-duplicate sequence entries; Compose's per-resource unique-key merge for a few
-    list attributes (e.g. long-form `ports`/`volumes` by target) is not modeled.
+- `.env` parsing is a small subset (no multiline values or in-value expansion).
+- Multi-file merge dedups exact-duplicate sequence entries; Compose's per-resource unique-key merge for
+  a few list attributes (e.g. long-form `ports`/`volumes` by target) is not modeled.
 - Still unsupported: `configs`/`secrets`, healthchecks, and `deploy` settings.
 - Structured `ports`/`volumes` models instead of raw strings.
 

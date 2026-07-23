@@ -54,6 +54,28 @@ The **project directory** (used for the default `.env` location, relative `build
 and the default project name) is the first compose file's directory, or `--project-directory <path>`
 when given.
 
+### Inspecting the resolved document
+
+`wslcc compose config` runs the resolution above and prints the result — the exact document the other
+verbs send to the daemon, plus the effective project name as a leading `name:` — without contacting
+`wslccd`. It is the quickest way to see how your `-f` files, `.env`, `${VAR}` references, `extends`, and
+profiles combine:
+
+```console
+$ wslcc compose config                  # print the fully-resolved YAML
+$ wslcc compose config --format json     # ...as JSON instead
+$ wslcc compose config --services        # just the enabled service names
+$ wslcc compose config --profiles        # every declared profile (before filtering)
+$ wslcc compose config --profile debug   # resolution with the 'debug' profile active
+$ wslcc compose config --no-interpolate  # leave ${VAR} references verbatim
+$ wslcc compose config --hash "*"        # a per-service config hash (change detection)
+$ wslcc compose config -q                # validate only (no output; non-zero exit on error)
+```
+
+The document goes to `stdout` (or `-o <path>`); warnings go to `stderr`, so `wslcc compose config > resolved.yaml`
+captures a clean file. `--hash` emits a wslcc-specific SHA-256 of each service's canonical config (not
+Docker Compose's own hash); `--resolve-image-digests` is not implemented because `config` runs offline.
+
 ## Not yet covered
 
 Full Compose specification fidelity is still planned (see [todo.md](todo.md)), including:

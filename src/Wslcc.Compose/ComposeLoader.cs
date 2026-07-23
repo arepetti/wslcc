@@ -25,6 +25,9 @@ public sealed class ComposeLoadOptions
 
     /// <summary>Process environment used for interpolation (overrides <c>.env</c>). Defaults to the real environment; injectable for tests.</summary>
     public IReadOnlyDictionary<string, string>? ProcessEnvironment { get; init; }
+
+    /// <summary>When <c>false</c>, <c>${VAR}</c> references are left verbatim (Compose's <c>--no-interpolate</c>). Files are still merged, <c>extends</c> resolved and profiles filtered.</summary>
+    public bool Interpolate { get; init; } = true;
 }
 
 /// <summary>Result of resolving a Compose project on the client.</summary>
@@ -38,6 +41,9 @@ public sealed class ComposeLoadResult
 
     /// <summary>Interpolation warnings (e.g. an unset variable defaulted to a blank string).</summary>
     public IReadOnlyList<string> Warnings { get; init; } = Array.Empty<string>();
+
+    /// <summary>All profile names declared across services (before profile filtering), sorted and de-duplicated.</summary>
+    public IReadOnlyList<string> DeclaredProfiles { get; init; } = Array.Empty<string>();
 }
 
 /// <summary>
@@ -80,7 +86,8 @@ public static class ComposeLoader
                 throw new ComposeLoadException($"Compose file not found: {full}");
             }
 
-            var graph = YamlGraph.Interpolate(YamlGraph.Deserialize(File.ReadAllText(full)), interpolator);
+            var parsed = YamlGraph.Deserialize(File.ReadAllText(full));
+            var graph = options.Interpolate ? YamlGraph.Interpolate(parsed, interpolator) : parsed;
             cache[full] = graph;
             return graph;
         }
@@ -92,6 +99,8 @@ public static class ComposeLoader
             merged = merged is null ? resolved : ComposeMerge.Merge(merged, resolved);
         }
 
+        var declaredProfiles = CollectDeclaredProfiles(merged);
+
         var activeProfiles = BuildActiveProfiles(options, pool);
         AddTargetedServiceProfiles(merged, options.TargetedServices, activeProfiles);
         merged = ComposeProfiles.Apply(merged, activeProfiles);
@@ -101,7 +110,36 @@ public static class ComposeLoader
             ResolvedYaml = YamlGraph.Serialize(merged),
             ProjectDirectory = projectDirectory,
             Warnings = warnings.Distinct(StringComparer.Ordinal).ToList(),
+            DeclaredProfiles = declaredProfiles,
         };
+    }
+
+    /// <summary>Gathers every profile named under any <c>services.*.profiles</c> (before filtering).</summary>
+    private static IReadOnlyList<string> CollectDeclaredProfiles(object? merged)
+    {
+        if (YamlGraph.AsMap(merged) is not { } root
+            || YamlGraph.AsMap(root.TryGetValue("services", out var s) ? s : null) is not { } services)
+        {
+            return Array.Empty<string>();
+        }
+
+        var profiles = new SortedSet<string>(StringComparer.Ordinal);
+        foreach (var service in services.Values)
+        {
+            if (YamlGraph.AsMap(service) is { } serviceMap
+                && YamlGraph.AsList(serviceMap.TryGetValue("profiles", out var p) ? p : null) is { } list)
+            {
+                foreach (var profile in list)
+                {
+                    if (Convert.ToString(profile) is { Length: > 0 } name)
+                    {
+                        profiles.Add(name);
+                    }
+                }
+            }
+        }
+
+        return profiles.ToList();
     }
 
     private static Dictionary<string, string> BuildVariablePool(ComposeLoadOptions options, string envDirectory)

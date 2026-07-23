@@ -49,4 +49,20 @@ public sealed class YamlGraphTests
         var baseNode = YamlGraph.Deserialize("a: 1");
         Assert.Same(baseNode, YamlGraph.DeepMerge(baseNode, null));
     }
+
+    [Fact]
+    public void SerializeJson_emits_json_for_the_graph()
+    {
+        var graph = YamlGraph.Deserialize("""
+            services:
+              web:
+                image: nginx
+                ports:
+                  - "8080:80"
+            """);
+
+        var json = YamlGraph.SerializeJson(graph).Replace(" ", string.Empty).Replace("\n", string.Empty).Replace("\r", string.Empty);
+
+        Assert.Equal("{\"services\":{\"web\":{\"image\":\"nginx\",\"ports\":[\"8080:80\"]}}}", json);
+    }
 }

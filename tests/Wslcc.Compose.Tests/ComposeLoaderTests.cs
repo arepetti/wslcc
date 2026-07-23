@@ -38,7 +38,8 @@ public sealed class ComposeLoaderTests : IDisposable
         Dictionary<string, string>? env = null,
         string? envFile = null,
         IReadOnlyList<string>? targetedServices = null,
-        string? projectDirectory = null)
+        string? projectDirectory = null,
+        bool interpolate = true)
         => ComposeLoader.Load(new ComposeLoadOptions
         {
             Files = files,
@@ -48,6 +49,7 @@ public sealed class ComposeLoaderTests : IDisposable
             ProjectDirectory = projectDirectory,
             EnvFilePath = envFile,
             ProcessEnvironment = env ?? new Dictionary<string, string>(StringComparer.Ordinal),
+            Interpolate = interpolate,
         });
 
     private static IReadOnlyCollection<string> ServiceNames(string yaml)
@@ -307,6 +309,48 @@ public sealed class ComposeLoaderTests : IDisposable
 
         var targeted = Load(new[] { file }, targetedServices: new[] { "debugger" });
         Assert.Contains("debugger", ServiceNames(targeted.ResolvedYaml));
+    }
+
+    [Fact]
+    public void Declared_profiles_are_collected_before_filtering_sorted_and_deduplicated()
+    {
+        var file = Write("compose.yaml", """
+            services:
+              web:
+                image: nginx
+              api:
+                image: myapi
+                profiles:
+                  - backend
+              debug:
+                image: busybox
+                profiles:
+                  - debug
+                  - backend
+            """);
+
+        // No profile active, so api/debug are filtered out of the resolved doc...
+        var result = Load(new[] { file });
+        Assert.DoesNotContain("api", ServiceNames(result.ResolvedYaml));
+
+        // ...but every declared profile is still reported.
+        Assert.Equal(new[] { "backend", "debug" }, result.DeclaredProfiles);
+    }
+
+    [Fact]
+    public void No_interpolate_leaves_variables_verbatim()
+    {
+        var file = Write("compose.yaml", """
+            services:
+              web:
+                image: nginx:${TAG:-stable}
+            """);
+        Write(".env", "TAG=1.27");
+
+        var result = Load(new[] { file }, interpolate: false);
+
+        Assert.Equal("nginx:${TAG:-stable}", Service(result.ResolvedYaml, "web")["image"]);
+        Assert.Empty(result.Warnings);
     }
 
     [Fact]
