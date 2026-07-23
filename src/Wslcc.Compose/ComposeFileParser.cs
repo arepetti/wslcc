@@ -1,7 +1,7 @@
 using Wslcc.Abstractions.Compose;
 using YamlDotNet.Serialization;
 
-namespace Wslcc.Core.Compose;
+namespace Wslcc.Compose;
 
 /// <summary>
 /// Parses Compose YAML into <see cref="ComposeFile"/>. This is a tolerant parser that understands

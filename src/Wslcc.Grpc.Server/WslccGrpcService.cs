@@ -1,8 +1,8 @@
 using Grpc.Core;
 using Wslcc.Abstractions;
 using Wslcc.Abstractions.Compose;
+using Wslcc.Compose;
 using Wslcc.Core;
-using Wslcc.Core.Compose;
 using Wslcc.Grpc.Contracts;
 
 namespace Wslcc.Grpc.Server;

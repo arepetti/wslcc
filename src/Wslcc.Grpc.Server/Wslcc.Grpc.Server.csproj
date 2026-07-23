@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Wslcc.Abstractions\Wslcc.Abstractions.csproj" />
+    <ProjectReference Include="..\Wslcc.Compose\Wslcc.Compose.csproj" />
     <ProjectReference Include="..\Wslcc.Core\Wslcc.Core.csproj" />
     <ProjectReference Include="..\Wslcc.Grpc.Contracts\Wslcc.Grpc.Contracts.csproj" />
   </ItemGroup>

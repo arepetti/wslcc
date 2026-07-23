@@ -37,8 +37,15 @@ Tracked, intentionally-deferred work. See [roadmap.md](roadmap.md) for the big p
 
 ## Compose file fidelity
 
-- Full Compose specification support: `profiles`, `extends`, `configs`/`secrets`, healthchecks,
-  `deploy`, variable interpolation (`${VAR}` and `.env`), and multi-file merge/override.
+- Variable interpolation (`${VAR}` / `.env`), multi-file merge/override (Compose per-attribute merge
+  rules), `extends` (with non-extendable-key rejection), and `profiles` (including auto-activation by
+  targeted service, `COMPOSE_PROFILES`, `--project-directory`, and `COMPOSE_FILE`) are implemented
+  client-side in `Wslcc.Compose.ComposeLoader` (the CLI resolves the project into one document before
+  sending it to the daemon). Remaining fidelity gaps in those features:
+  - `.env` parsing is a small subset (no multiline values or in-value expansion).
+  - Merge dedups exact-duplicate sequence entries; Compose's per-resource unique-key merge for a few
+    list attributes (e.g. long-form `ports`/`volumes` by target) is not modeled.
+- Still unsupported: `configs`/`secrets`, healthchecks, and `deploy` settings.
 - Structured `ports`/`volumes` models instead of raw strings.
 
 ## WSL provider

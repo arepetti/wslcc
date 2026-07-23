@@ -37,13 +37,20 @@ Applied to `up`, `down`, `ps`, `start`, `stop`, `restart`, `pull`, `build`, and 
 
 | Option | Description |
 | --- | --- |
-| `-f`, `--file <path>` | Compose file. Defaults to `compose.yaml` / `compose.yml` / `docker-compose.yaml` / `docker-compose.yml` in the current directory. |
-| `-p`, `--project-name <name>` | Project name. Defaults to the file's `name:` or the directory name. Containers are named `<project>-<service>` and labelled `wslcc.project` / `wslcc.service`. |
+| `-f`, `--file <path>` | Compose file. **Repeatable** — later files override earlier ones (`-f a.yaml -f b.yaml`). Defaults to `COMPOSE_FILE` (split on `COMPOSE_PATH_SEPARATOR`) then `compose.yaml` / `compose.yml` / `docker-compose.yaml` / `docker-compose.yml` in the current directory. |
+| `-p`, `--project-name <name>` | Project name. Defaults to the file's `name:` or the project directory's name. Containers are named `<project>-<service>` and labelled `wslcc.project` / `wslcc.service`. |
+| `--profile <name>` | Activate a profile (repeatable; also read from `COMPOSE_PROFILES`, or by naming a service that carries the profile). Services with a `profiles:` list are only included when one of their profiles is active. |
+| `--env-file <path>` | Environment file for `${VAR}` interpolation. Defaults to `.env` in the project directory when present. |
+| `--project-directory <path>` | Alternate project directory (default: the first compose file's directory). Sets the default `.env` location, the `build.context` base, and the default project name. |
 | `--pull` | (`up`) Always pull images before starting. |
 | `-a`, `--all` | (`ps`) Include stopped containers. |
 | `[SERVICES]` | (`start`, `stop`, `restart`, `pull`, `build`, `logs`) Optional service names to target. Defaults to every matching service. |
 | `--follow` | (`logs`) Keep streaming new log output; stop with Ctrl+C. No `-f` short form since `-f` is already `--file`. |
 | `--tail <n>` | (`logs`) Show only the last `n` lines per container. Defaults to all. |
+
+> The compose file is resolved on the client before anything is sent to the daemon: `-f` files are
+> merged, `.env` is loaded, `${VAR}` references are interpolated, `extends` is resolved, and services
+> excluded by the active profiles are dropped. See [compose-file.md](compose-file.md#resolution-features).
 
 > `up` currently runs detached; foreground/attached log streaming for `up` itself is tracked in
 > [todo.md](todo.md) (use `wslcc compose logs --follow` separately in the meantime).

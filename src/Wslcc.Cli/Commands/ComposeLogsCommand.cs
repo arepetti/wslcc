@@ -27,7 +27,11 @@ public sealed class ComposeLogsCommand : AsyncCommand<ComposeLogsCommand.Setting
 
     protected override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
-        var inputs = ComposeFiles.Resolve(settings.File);
+        if (!ComposeFiles.TryResolve(settings, out var inputs, out var loadError, settings.Services))
+        {
+            AnsiConsole.MarkupLine(loadError);
+            return 1;
+        }
 
         if (inputs is null && string.IsNullOrWhiteSpace(settings.ProjectName))
         {

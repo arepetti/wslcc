@@ -10,7 +10,8 @@ All projects target `net10.0` (see [CONTRIBUTING.md](../CONTRIBUTING.md) for the
 | Project | Role |
 | --- | --- |
 | `Wslcc.Abstractions` | Contracts and models: `IContainerProvider`, `IComposeEngine`, `ProviderInfo`, Compose model types, `ProcessRunner` (incl. streaming process output as `IAsyncEnumerable<string>`). |
-| `Wslcc.Core` | Provider-agnostic logic: Compose YAML parser and the orchestration engine (`ComposeEngine`). |
+| `Wslcc.Compose` | All Compose file handling: the tolerant YAML parser (`ComposeFileParser` → typed model) plus client-side resolution (`ComposeLoader`): multi-file merge, `.env`, `${VAR}` interpolation, `extends`, and profile filtering. Used by the CLI (resolution) and the daemon (parsing). |
+| `Wslcc.Core` | Provider-agnostic orchestration: the engine (`ComposeEngine`) and project-name resolution (`ProjectNames`). |
 | `Wslcc.Providers.Common` | Shared base (`CliContainerProviderBase`, `CliCommandBuilder`) for providers that drive a standard container CLI. |
 | `Wslcc.Providers.Wslc` | Provider for WSL containers. Container ops from the shared CLI base (`wslc`); version/availability via the SDK path (`Microsoft.WSL.Containers`) gated behind `WSLC_SDK`, with a `wslc.exe` fallback. |
 | `Wslcc.Providers.DockerCompose` | Provider that drives the `docker` CLI (container ops) and `docker compose version` (version). |
@@ -30,7 +31,9 @@ graph TD
   ProvidersWslc[Providers.Wslc] --> ProvidersCommon
   ProvidersDocker[Providers.DockerCompose] --> ProvidersCommon
   Contracts[Grpc.Contracts]
+  Compose[Wslcc.Compose] --> Abstractions
   Server[Grpc.Server] --> Core
+  Server --> Compose
   Server --> Contracts
   Client --> Contracts
   Daemon[Wslccd] --> Server
@@ -38,10 +41,23 @@ graph TD
   Daemon --> ProvidersWslc
   Daemon --> ProvidersDocker
   Cli[Wslcc.Cli] --> Client
+  Cli --> Compose
 ```
 
 Providers depend only on `Abstractions`. The daemon is the composition root: it registers the
 providers and constructs the `ComposeEngine`, keeping `Core` provider-agnostic.
+
+## Compose resolution (client-side)
+
+The CLI resolves the Compose project **before** contacting the daemon: `Wslcc.Compose.ComposeLoader`
+reads the `-f` file(s) where `wslcc` runs, merges them (later files override earlier ones), loads
+`.env` and interpolates `${VAR}` references (process environment overriding `.env`), resolves
+`extends` (in-file or cross-file, relative to the declaring file), and drops services excluded by the
+active profiles (`--profile` / `COMPOSE_PROFILES`). The result is re-serialized to a single YAML
+document that is sent over the unchanged `compose_yaml` field. The daemon still parses that document
+with `Wslcc.Compose.ComposeFileParser` (the same library, into the typed model), but never needs access
+to the client's files or environment — important because `wslccd` can run as a service in a different
+directory (the same reason `build` ships a `base_directory`).
 
 ## Runtime flow (version slice)
 

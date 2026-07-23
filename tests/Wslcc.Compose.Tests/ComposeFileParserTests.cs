@@ -1,6 +1,6 @@
-using Wslcc.Core.Compose;
+using Wslcc.Compose;
 
-namespace Wslcc.Core.Tests;
+namespace Wslcc.Compose.Tests;
 
 public sealed class ComposeFileParserTests
 {

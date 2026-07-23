@@ -19,7 +19,12 @@ public sealed class ComposeBuildCommand : AsyncCommand<ComposeBuildCommand.Setti
 
     protected override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
-        var inputs = ComposeFiles.Resolve(settings.File);
+        if (!ComposeFiles.TryResolve(settings, out var inputs, out var loadError, settings.Services))
+        {
+            AnsiConsole.MarkupLine(loadError);
+            return 1;
+        }
+
         if (inputs is null)
         {
             AnsiConsole.MarkupLine("[red]No compose file found.[/] Use [bold]-f <path>[/] or run from a directory containing compose.yaml / docker-compose.yml.");
@@ -32,7 +37,7 @@ public sealed class ComposeBuildCommand : AsyncCommand<ComposeBuildCommand.Setti
             DefaultProjectName = inputs.DefaultProjectName,
             ComposeYaml = inputs.Yaml,
             Provider = settings.Provider ?? string.Empty,
-            BaseDirectory = Path.GetDirectoryName(inputs.FilePath) ?? string.Empty,
+            BaseDirectory = inputs.ProjectDirectory,
         };
         request.Services.AddRange(settings.Services);
 

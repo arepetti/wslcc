@@ -3,6 +3,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Wslcc.Client\Wslcc.Client.csproj" />
     <ProjectReference Include="..\Wslcc.Abstractions\Wslcc.Abstractions.csproj" />
+    <ProjectReference Include="..\Wslcc.Compose\Wslcc.Compose.csproj" />
   </ItemGroup>
 
   <ItemGroup>

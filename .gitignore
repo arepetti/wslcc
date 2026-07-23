@@ -485,3 +485,6 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# WSLCC: ad-hoc patch files generated for out-of-band sharing (not part of the repo history)
+*.patch

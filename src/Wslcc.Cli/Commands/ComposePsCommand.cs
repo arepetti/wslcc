@@ -19,7 +19,11 @@ public sealed class ComposePsCommand : AsyncCommand<ComposePsCommand.Settings>
 
     protected override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
-        var inputs = ComposeFiles.Resolve(settings.File);
+        if (!ComposeFiles.TryResolve(settings, out var inputs, out var loadError))
+        {
+            AnsiConsole.MarkupLine(loadError);
+            return 1;
+        }
 
         var request = new PsRequest
         {
