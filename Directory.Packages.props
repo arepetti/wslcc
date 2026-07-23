@@ -19,7 +19,7 @@
     <PackageVersion Include="Spectre.Console" Version="0.57.2" />
     <PackageVersion Include="Spectre.Console.Cli" Version="0.55.0" />
     <PackageVersion Include="xunit" Version="2.9.3" />
-    <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.4" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
     <PackageVersion Include="YamlDotNet" Version="18.1.0" />
   </ItemGroup>
   <!-- Additional versions are appended below by 'dotnet add package'. -->
