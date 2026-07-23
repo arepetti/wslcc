@@ -98,6 +98,11 @@ Available on every leaf command and supplied after the subcommand, e.g.
 | --- | --- |
 | `-H`, `--host <uri>` | Daemon endpoint. `npipe://<name>` (default) or `npipe://<server>/<name>` for a local pipe; `http(s)://host:port` for a remote daemon. |
 | `--provider <name>` | Target `wslc` or `docker` for this command. When omitted, the daemon's default provider is used (configured in appsettings.json or via `wslcc daemon start --provider <name>`). |
+| `--no-color` | Disable colored output for the command. Also honored via the `NO_COLOR` environment variable. |
 
 > Normally you don't need `--provider` at all: set it once with `wslcc daemon start --provider docker`,
 > and every subsequent command uses that default. Use `--provider` only to override a single command.
+
+> `--no-color` (and `NO_COLOR`) disables ANSI colors across all output, including the per-service prefix
+> that `wslcc compose logs` normally colors — this is the equivalent of `docker compose logs --no-color`.
+> Spectre.Console also auto-disables color when output is not a terminal (e.g. piped or redirected).

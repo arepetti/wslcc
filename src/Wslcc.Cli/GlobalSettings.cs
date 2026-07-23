@@ -25,4 +25,8 @@ public class GlobalSettings : BranchSettings
     [CommandOption("--provider <NAME>")]
     [Description("Provider to target: 'wslc' or 'docker'. Defaults to the daemon's configured provider.")]
     public string? Provider { get; set; }
+
+    [CommandOption("--no-color")]
+    [Description("Disable colored output. Also honored via the NO_COLOR environment variable.")]
+    public bool NoColor { get; set; }
 }

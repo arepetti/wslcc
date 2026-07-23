@@ -25,8 +25,9 @@ Tracked, intentionally-deferred work. See [roadmap.md](roadmap.md) for the big p
 - Foreground/attached `up`: `up` runs detached only; add an attached mode with streamed logs. Also
   consider streaming per-service progress for the remaining unary RPCs
   (`Up`/`Down`/`Ps`/`Start`/`Stop`/`Restart`/`Pull`/`Build`) instead of returning a single batch result.
-- `logs`: add `--timestamps`, `--no-color`, and `--since`, and sort the merged multi-container output by
-  timestamp (today lines are interleaved as they arrive).
+- `logs`: add `--timestamps` and `--since`, and sort the merged multi-container output by timestamp
+  (today lines are interleaved as they arrive). `--no-color` is already handled by the global `--no-color`
+  flag / `NO_COLOR`.
 - Recreate policy: `up` always recreates existing containers by name; add change-detection so unchanged
   services are left running.
 - Honor `depends_on` conditions (`service_healthy`, `service_completed_successfully`) and healthchecks;

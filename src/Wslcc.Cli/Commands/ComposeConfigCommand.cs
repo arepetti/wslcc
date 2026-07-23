@@ -29,7 +29,7 @@ public sealed class ComposeConfigCommand : Command<ComposeConfigCommand.Settings
 
         [CommandOption("--profiles")]
         [Description("Print the profile names declared across services instead of the full config.")]
-        public bool Profiles { get; set; }
+        public bool ListProfiles { get; set; }
 
         [CommandOption("--hash <SERVICES>")]
         [Description("Print a config hash per service. Use '*' for all services or a comma-separated list.")]
@@ -69,7 +69,7 @@ public sealed class ComposeConfigCommand : Command<ComposeConfigCommand.Settings
         }
 
         var reportModes = (settings.Services ? 1 : 0) + (settings.Volumes ? 1 : 0) + (settings.Images ? 1 : 0)
-            + (settings.Profiles ? 1 : 0) + (settings.Hash is not null ? 1 : 0);
+            + (settings.ListProfiles ? 1 : 0) + (settings.Hash is not null ? 1 : 0);
         if (reportModes > 1)
         {
             AnsiConsole.MarkupLine("[red]Only one of --services, --volumes, --images, --profiles or --hash may be used at a time.[/]");
@@ -105,7 +105,7 @@ public sealed class ComposeConfigCommand : Command<ComposeConfigCommand.Settings
             return PrintHashes(inputs.Yaml, settings.Hash);
         }
 
-        if (settings.Services || settings.Volumes || settings.Images || settings.Profiles)
+        if (settings.Services || settings.Volumes || settings.Images || settings.ListProfiles)
         {
             var names =
                 settings.Services ? ComposeConfigView.ServiceNames(inputs.Yaml) :

@@ -8,6 +8,7 @@ app.Configure(config =>
 {
     config.SetApplicationName("wslcc");
     config.SetApplicationVersion(CliVersion.Value);
+    config.SetInterceptor(new ColorInterceptor());
 
     config.AddCommand<VersionCommand>("version")
         .WithDescription("Show wslcc, daemon, and provider versions.");

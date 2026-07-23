@@ -38,6 +38,7 @@ All notable changes to this project are documented here. The format is based on
   - `--no-interpolate` leaves `${VAR}` references verbatim (files are still merged, `extends` resolved, profiles filtered).
   - `-q|--quiet` validates only; `-o|--output <path>` writes to a file.
   - The document goes to `stdout` and resolver warnings to `stderr`, so a redirected/piped document stays clean. `--resolve-image-digests` is intentionally not implemented (it needs registry access, which the offline client-side `config` does not have). This was the last stubbed `compose` verb; the placeholder stub command has been removed.
+- Global `--no-color` option (on every command) plus explicit `NO_COLOR` environment-variable handling: both switch the console to a color-less profile via a command interceptor. This also covers the colored per-service prefix of `compose logs` (the equivalent of `docker compose logs --no-color`). Spectre.Console additionally auto-disables color for non-terminal (piped/redirected) output.
 
 ### Changed
 - Consolidated Compose parsing into a single library: the tolerant `ComposeFileParser` moved from `Wslcc.Core` to `Wslcc.Compose` (now referenced by `Wslcc.Grpc.Server`), so client resolution and daemon parsing share one YAML parser. `Wslcc.Core` no longer depends on `YamlDotNet`.
