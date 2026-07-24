@@ -8,7 +8,7 @@ WSLCC-specific commands. `wslcc compose ps` is the same token count as `docker c
 | Docker | WSLCC | Status |
 | --- | --- | --- |
 | `docker compose version` | `wslcc compose version` | Implemented (`--short`, `--format json\|pretty`) |
-| `docker compose up` | `wslcc compose up` | Implemented (detached; `-f`, `-p`, `--pull`, `--build`, `--no-build`; auto-builds `build:` services when their image is missing) |
+| `docker compose up` | `wslcc compose up` | Implemented (attached by default, `-d`/`--detach` to background; `-f`, `-p`, `--pull`, `--build`, `--no-build`; auto-builds `build:` services when their image is missing) |
 | `docker compose down` | `wslcc compose down` | Implemented (`-f`, `-p`) |
 | `docker compose ps` | `wslcc compose ps` | Implemented (`-f`, `-p`, `-a`) |
 | `docker compose start` | `wslcc compose start` | Implemented (`-f`, `-p`, `[SERVICES]`) |
@@ -47,6 +47,7 @@ Applied to `up`, `down`, `ps`, `start`, `stop`, `restart`, `pull`, `build`, `log
 | `--pull` | (`up`) Always pull images before starting. |
 | `--build` | (`up`) Always (re)build services with a `build:` section before starting, even if the image already exists. Mutually exclusive with `--no-build`. |
 | `--no-build` | (`up`) Never build; fail a `build:` service whose image is missing instead of building it. Mutually exclusive with `--build`. |
+| `-d`, `--detach` | (`up`) Start the services in the background and return. By default `up` stays attached, streaming the containers' combined logs until Ctrl+C, which then gracefully stops the project. |
 | `-a`, `--all` | (`ps`) Include stopped containers. |
 | `[SERVICES]` | (`start`, `stop`, `restart`, `pull`, `build`, `logs`) Optional service names to target. Defaults to every matching service. |
 | `--follow` | (`logs`) Keep streaming new log output; stop with Ctrl+C. No `-f` short form since `-f` is already `--file`. |
@@ -65,8 +66,9 @@ Applied to `up`, `down`, `ps`, `start`, `stop`, `restart`, `pull`, `build`, `log
 > merged, `.env` is loaded, `${VAR}` references are interpolated, `extends` is resolved, and services
 > excluded by the active profiles are dropped. See [compose-file.md](compose-file.md#resolution-features).
 
-> `up` currently runs detached; foreground/attached log streaming for `up` itself is tracked in
-> [todo.md](todo.md) (use `wslcc compose logs --follow` separately in the meantime).
+> `up` attaches to the project's combined log output by default (the same rendering as `compose logs`):
+> the first Ctrl+C gracefully stops the containers (a second one abandons the wait), and the command then
+> exits with code `130`. Pass `-d`/`--detach` to return immediately and leave the services running.
 
 > `ps` with no `-f`/`-p` lists **all** wslcc-managed containers across projects (with a Project column);
 > supply `-f` or `-p` to scope to one project. `down`, `start`, `stop`, `restart`, and `logs` always

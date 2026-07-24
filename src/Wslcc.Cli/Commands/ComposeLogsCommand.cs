@@ -65,13 +65,7 @@ public sealed class ComposeLogsCommand : AsyncCommand<ComposeLogsCommand.Setting
         try
         {
             using var client = new WslccClient(settings.Host);
-            var any = false;
-
-            await foreach (var line in client.GetLogsAsync(request, cts.Token).ConfigureAwait(false))
-            {
-                any = true;
-                AnsiConsole.MarkupLine($"[grey]{line.Service.EscapeMarkup()}[/] | {line.Line.EscapeMarkup()}");
-            }
+            var any = await LogStreaming.RenderAsync(client, request, cts.Token).ConfigureAwait(false);
 
             if (!any)
             {

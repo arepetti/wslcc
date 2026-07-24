@@ -15,9 +15,9 @@ Tracked, intentionally-deferred work. See [roadmap.md](roadmap.md) for the big p
 - `config --resolve-image-digests`: pin each service image to its `repo@sha256:...` digest. Deferred
   because `config` runs offline/client-side and resolving digests needs registry access (would require a
   registry client or routing through the daemon/provider).
-- Foreground/attached `up`: `up` runs detached only; add an attached mode with streamed logs. Also
-  consider streaming per-service progress for the remaining unary RPCs
-  (`Up`/`Down`/`Ps`/`Start`/`Stop`/`Restart`/`Pull`/`Build`) instead of returning a single batch result.
+- Stream per-service progress for the remaining unary RPCs
+  (`Up`/`Down`/`Ps`/`Start`/`Stop`/`Restart`/`Pull`/`Build`) instead of returning a single batch result,
+  so long operations report progress incrementally (as `logs` and attached `up` already do).
 - `logs`: add `--timestamps` and `--since`, and sort the merged multi-container output by timestamp
   (today lines are interleaved as they arrive). `--no-color` is already handled by the global `--no-color`
   flag / `NO_COLOR`.
