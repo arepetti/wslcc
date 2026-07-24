@@ -109,7 +109,7 @@ public sealed class WslccGrpcService : global::Wslcc.Grpc.Contracts.Wslcc.WslccB
         }
 
         var results = await Guard(() =>
-            _engine.DownAsync(project, NullIfEmpty(request.Provider), context.CancellationToken))
+            _engine.DownAsync(project, file, NullIfEmpty(request.Provider), context.CancellationToken))
             .ConfigureAwait(false);
 
         var response = new DownResponse { ProjectName = project };
@@ -145,7 +145,7 @@ public sealed class WslccGrpcService : global::Wslcc.Grpc.Contracts.Wslcc.WslccB
 
         var services = request.Services.Count > 0 ? request.Services.ToList() : null;
         var results = await Guard(() =>
-            _engine.StartAsync(project, NullIfEmpty(request.Provider), services, context.CancellationToken))
+            _engine.StartAsync(project, file, NullIfEmpty(request.Provider), services, context.CancellationToken))
             .ConfigureAwait(false);
 
         var response = new StartResponse { ProjectName = project };
@@ -166,7 +166,7 @@ public sealed class WslccGrpcService : global::Wslcc.Grpc.Contracts.Wslcc.WslccB
 
         var services = request.Services.Count > 0 ? request.Services.ToList() : null;
         var results = await Guard(() =>
-            _engine.StopAsync(project, NullIfEmpty(request.Provider), services, context.CancellationToken))
+            _engine.StopAsync(project, file, NullIfEmpty(request.Provider), services, context.CancellationToken))
             .ConfigureAwait(false);
 
         var response = new StopResponse { ProjectName = project };
@@ -187,7 +187,7 @@ public sealed class WslccGrpcService : global::Wslcc.Grpc.Contracts.Wslcc.WslccB
 
         var services = request.Services.Count > 0 ? request.Services.ToList() : null;
         var results = await Guard(() =>
-            _engine.RestartAsync(project, NullIfEmpty(request.Provider), services, context.CancellationToken))
+            _engine.RestartAsync(project, file, NullIfEmpty(request.Provider), services, context.CancellationToken))
             .ConfigureAwait(false);
 
         var response = new RestartResponse { ProjectName = project };
@@ -256,7 +256,7 @@ public sealed class WslccGrpcService : global::Wslcc.Grpc.Contracts.Wslcc.WslccB
         try
         {
             var lines = _engine.GetLogsAsync(
-                project, NullIfEmpty(request.Provider), services, request.Follow, tail, context.CancellationToken);
+                project, file, NullIfEmpty(request.Provider), services, request.Follow, tail, context.CancellationToken);
 
             await foreach (var line in lines.WithCancellation(context.CancellationToken).ConfigureAwait(false))
             {

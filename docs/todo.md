@@ -15,10 +15,6 @@ Tracked, intentionally-deferred work. See [roadmap.md](roadmap.md) for the big p
 - `config --resolve-image-digests`: pin each service image to its `repo@sha256:...` digest. Deferred
   because `config` runs offline/client-side and resolving digests needs registry access (would require a
   registry client or routing through the daemon/provider).
-- `start`/`stop`/`restart`/`logs` operate on already-created containers only and do not honor
-  `depends_on` ordering the way `up`/`down` do; requesting an unknown service name is silently a no-op
-  rather than an error (`pull`/`build` share the "unknown service name is ignored" gap). Honor ordering
-  and reject unknown service names.
 - Foreground/attached `up`: `up` runs detached only; add an attached mode with streamed logs. Also
   consider streaming per-service progress for the remaining unary RPCs
   (`Up`/`Down`/`Ps`/`Start`/`Stop`/`Restart`/`Pull`/`Build`) instead of returning a single batch result.

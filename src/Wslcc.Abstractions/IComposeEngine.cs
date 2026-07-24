@@ -36,9 +36,13 @@ public interface IComposeEngine
         string? baseDirectory,
         CancellationToken cancellationToken = default);
 
-    /// <summary>Stops and removes all containers belonging to the project.</summary>
+    /// <summary>
+    /// Stops and removes all containers belonging to the project, in reverse <c>depends_on</c> order
+    /// (dependents first) when <paramref name="file"/> is provided.
+    /// </summary>
     Task<IReadOnlyList<ServiceOperationResult>> DownAsync(
         string projectName,
+        ComposeFile? file,
         string? providerName,
         CancellationToken cancellationToken = default);
 
@@ -53,32 +57,41 @@ public interface IComposeEngine
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Starts existing (stopped) containers for the project. When <paramref name="services"/> is null
-    /// or empty, every existing container for the project is started. Never throws for a single
-    /// container failure; the outcome is captured per service.
+    /// Starts existing (stopped) containers for the project, in <c>depends_on</c> order (dependencies
+    /// first) when <paramref name="file"/> is provided. When <paramref name="services"/> is null or
+    /// empty, every existing container for the project is started; a requested service name that the
+    /// project does not define is rejected. Never throws for a single container failure; the outcome is
+    /// captured per service.
     /// </summary>
     Task<IReadOnlyList<ServiceOperationResult>> StartAsync(
         string projectName,
+        ComposeFile? file,
         string? providerName,
         IReadOnlyList<string>? services,
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Stops the project's containers without removing them. When <paramref name="services"/> is null
-    /// or empty, every existing container for the project is stopped.
+    /// Stops the project's containers (without removing them) in reverse <c>depends_on</c> order
+    /// (dependents first) when <paramref name="file"/> is provided. When <paramref name="services"/> is
+    /// null or empty, every existing container for the project is stopped; a requested service name that
+    /// the project does not define is rejected.
     /// </summary>
     Task<IReadOnlyList<ServiceOperationResult>> StopAsync(
         string projectName,
+        ComposeFile? file,
         string? providerName,
         IReadOnlyList<string>? services,
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Restarts the project's containers. When <paramref name="services"/> is null or empty, every
-    /// existing container for the project is restarted.
+    /// Restarts the project's containers, in <c>depends_on</c> order (dependencies first) when
+    /// <paramref name="file"/> is provided. When <paramref name="services"/> is null or empty, every
+    /// existing container for the project is restarted; a requested service name that the project does
+    /// not define is rejected.
     /// </summary>
     Task<IReadOnlyList<ServiceOperationResult>> RestartAsync(
         string projectName,
+        ComposeFile? file,
         string? providerName,
         IReadOnlyList<string>? services,
         CancellationToken cancellationToken = default);
@@ -113,11 +126,14 @@ public interface IComposeEngine
     /// <summary>
     /// Streams log lines from the project's existing containers, tagging each line with its service
     /// name. When <paramref name="services"/> is null/empty, every existing container for the project
-    /// is included. When <paramref name="follow"/> is <c>true</c>, the stream stays open until
+    /// is included; a requested service name that the project does not define is rejected. Containers
+    /// are attached in <c>depends_on</c> order (dependencies first) when <paramref name="file"/> is
+    /// provided. When <paramref name="follow"/> is <c>true</c>, the stream stays open until
     /// <paramref name="cancellationToken"/> is cancelled.
     /// </summary>
     IAsyncEnumerable<ServiceLogLine> GetLogsAsync(
         string projectName,
+        ComposeFile? file,
         string? providerName,
         IReadOnlyList<string>? services,
         bool follow,

@@ -132,11 +132,15 @@ public sealed class ComposeEngine : IComposeEngine
 
     public async Task<IReadOnlyList<ServiceOperationResult>> DownAsync(
         string projectName,
+        ComposeFile? file,
         string? providerName,
         CancellationToken cancellationToken = default)
     {
         var provider = ResolveProvider(providerName);
         var containers = await provider.ListContainersAsync(projectName, all: true, cancellationToken).ConfigureAwait(false);
+
+        // Tear down in reverse dependency order (dependents first), mirroring `stop`.
+        containers = OrderContainers(file, containers, reverse: true);
 
         var results = new List<ServiceOperationResult>();
         foreach (var container in containers)
@@ -176,31 +180,34 @@ public sealed class ComposeEngine : IComposeEngine
 
     public Task<IReadOnlyList<ServiceOperationResult>> StartAsync(
         string projectName,
+        ComposeFile? file,
         string? providerName,
         IReadOnlyList<string>? services,
         CancellationToken cancellationToken = default)
         => ApplyToContainersAsync(
-            projectName, providerName, services, "started",
+            projectName, file, providerName, services, "started", reverseOrder: false,
             (provider, containerName, ct) => provider.StartContainerAsync(containerName, ct),
             cancellationToken);
 
     public Task<IReadOnlyList<ServiceOperationResult>> StopAsync(
         string projectName,
+        ComposeFile? file,
         string? providerName,
         IReadOnlyList<string>? services,
         CancellationToken cancellationToken = default)
         => ApplyToContainersAsync(
-            projectName, providerName, services, "stopped",
+            projectName, file, providerName, services, "stopped", reverseOrder: true,
             (provider, containerName, ct) => provider.StopContainerAsync(containerName, ct),
             cancellationToken);
 
     public Task<IReadOnlyList<ServiceOperationResult>> RestartAsync(
         string projectName,
+        ComposeFile? file,
         string? providerName,
         IReadOnlyList<string>? services,
         CancellationToken cancellationToken = default)
         => ApplyToContainersAsync(
-            projectName, providerName, services, "restarted",
+            projectName, file, providerName, services, "restarted", reverseOrder: false,
             (provider, containerName, ct) => provider.RestartContainerAsync(containerName, ct),
             cancellationToken);
 
@@ -333,7 +340,10 @@ public sealed class ComposeEngine : IComposeEngine
         return Path.GetFullPath(Path.Combine(baseDirectory, context));
     }
 
-    /// <summary>Selects the requested services from the file, or every service when none were requested.</summary>
+    /// <summary>
+    /// Selects the requested services from the file, or every service when none were requested. A
+    /// requested name the file does not define is rejected (instead of being silently ignored).
+    /// </summary>
     private static IEnumerable<ServiceSpec> SelectServices(ComposeFile file, IReadOnlyList<string>? services)
     {
         if (services is not { Count: > 0 })
@@ -342,19 +352,100 @@ public sealed class ComposeEngine : IComposeEngine
         }
 
         var selected = new List<ServiceSpec>();
+        var unknown = new List<string>();
         foreach (var name in services)
         {
             if (file.Services.TryGetValue(name, out var service))
             {
                 selected.Add(service);
             }
+            else
+            {
+                unknown.Add(name);
+            }
         }
 
+        ThrowIfUnknownServices(unknown);
         return selected;
+    }
+
+    /// <summary>Throws a <see cref="ProviderException"/> listing any service names that were not found.</summary>
+    private static void ThrowIfUnknownServices(IReadOnlyList<string> unknown)
+    {
+        if (unknown.Count > 0)
+        {
+            throw new ProviderException($"no such service: {string.Join(", ", unknown)}");
+        }
+    }
+
+    /// <summary>
+    /// Orders the project's existing containers by the compose <c>depends_on</c> graph (dependencies
+    /// first), optionally reversed for teardown-style operations. Containers whose service is not in the
+    /// file keep their original relative order after the known ones. When no file is provided there is no
+    /// dependency graph, so the provider's listing order is preserved as-is.
+    /// </summary>
+    private static IReadOnlyList<ContainerInfo> OrderContainers(
+        ComposeFile? file,
+        IReadOnlyList<ContainerInfo> containers,
+        bool reverse)
+    {
+        if (file is null)
+        {
+            return containers;
+        }
+
+        var rank = new Dictionary<string, int>(StringComparer.Ordinal);
+        var next = 0;
+        foreach (var service in OrderServices(file))
+        {
+            rank[service.Name] = next++;
+        }
+
+        int RankOf(ContainerInfo c)
+            => c.Service is not null && rank.TryGetValue(c.Service, out var r) ? r : int.MaxValue;
+
+        var ordered = containers
+            .Select((container, index) => (container, index))
+            .OrderBy(t => RankOf(t.container))
+            .ThenBy(t => t.index)
+            .Select(t => t.container)
+            .ToList();
+
+        if (reverse)
+        {
+            ordered.Reverse();
+        }
+
+        return ordered;
+    }
+
+    /// <summary>
+    /// Rejects requested service names the project does not know about. When <paramref name="file"/> is
+    /// provided the universe of names is its declared services; otherwise it is the set of services that
+    /// currently have a container (the only definition available for a project addressed only by name).
+    /// </summary>
+    private static void ValidateRequestedServices(
+        ComposeFile? file,
+        IReadOnlyList<ContainerInfo> containers,
+        IReadOnlyList<string>? services)
+    {
+        if (services is not { Count: > 0 })
+        {
+            return;
+        }
+
+        var known = file is not null
+            ? new HashSet<string>(file.Services.Keys, StringComparer.Ordinal)
+            : new HashSet<string>(
+                containers.Where(c => c.Service is not null).Select(c => c.Service!),
+                StringComparer.Ordinal);
+
+        ThrowIfUnknownServices(services.Where(s => !known.Contains(s)).ToList());
     }
 
     public async IAsyncEnumerable<ServiceLogLine> GetLogsAsync(
         string projectName,
+        ComposeFile? file,
         string? providerName,
         IReadOnlyList<string>? services,
         bool follow,
@@ -364,11 +455,15 @@ public sealed class ComposeEngine : IComposeEngine
         var provider = ResolveProvider(providerName);
         var containers = await provider.ListContainersAsync(projectName, all: true, cancellationToken).ConfigureAwait(false);
 
+        ValidateRequestedServices(file, containers, services);
+
         if (services is { Count: > 0 })
         {
             var requested = new HashSet<string>(services, StringComparer.Ordinal);
             containers = containers.Where(c => c.Service is not null && requested.Contains(c.Service)).ToList();
         }
+
+        containers = OrderContainers(file, containers, reverse: false);
 
         if (containers.Count == 0)
         {
@@ -418,26 +513,34 @@ public sealed class ComposeEngine : IComposeEngine
     }
 
     /// <summary>
-    /// Shared driver for start/stop/restart: lists the project's existing containers, optionally
-    /// filters to the requested service names, then applies <paramref name="action"/> to each,
-    /// capturing a per-service outcome instead of throwing on the first failure.
+    /// Shared driver for start/stop/restart: lists the project's existing containers, rejects unknown
+    /// requested service names, optionally filters to the requested ones, orders them by the compose
+    /// <c>depends_on</c> graph (reversed for teardown-style operations), then applies
+    /// <paramref name="action"/> to each, capturing a per-service outcome instead of throwing on the
+    /// first failure.
     /// </summary>
     private async Task<IReadOnlyList<ServiceOperationResult>> ApplyToContainersAsync(
         string projectName,
+        ComposeFile? file,
         string? providerName,
         IReadOnlyList<string>? services,
         string successStatus,
+        bool reverseOrder,
         Func<IContainerProvider, string, CancellationToken, Task> action,
         CancellationToken cancellationToken)
     {
         var provider = ResolveProvider(providerName);
         var containers = await provider.ListContainersAsync(projectName, all: true, cancellationToken).ConfigureAwait(false);
 
+        ValidateRequestedServices(file, containers, services);
+
         if (services is { Count: > 0 })
         {
             var requested = new HashSet<string>(services, StringComparer.Ordinal);
             containers = containers.Where(c => c.Service is not null && requested.Contains(c.Service)).ToList();
         }
+
+        containers = OrderContainers(file, containers, reverseOrder);
 
         var results = new List<ServiceOperationResult>();
         foreach (var container in containers)

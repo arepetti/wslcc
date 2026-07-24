@@ -71,6 +71,13 @@ Applied to `up`, `down`, `ps`, `start`, `stop`, `restart`, `pull`, `build`, `log
 > require a project (`-f` or `-p`). `pull` and `build` (like `up`) require a compose file, since they
 > read service images / build contexts from it.
 
+> `start`, `restart`, and `logs` process containers in `depends_on` order (dependencies first); `stop`
+> and `down` use the reverse (dependents first). Ordering needs the compose file — with `-p` only, the
+> daemon has no dependency graph and falls back to listing order. Naming a `[SERVICES]` argument that the project
+> does not define (or, with `-p` only, that has no container) is rejected with `no such service: <name>`
+> instead of being silently ignored; `pull` and `build` reject unknown service names against the compose
+> file the same way.
+
 > `build` tags the built image as `<project>-<service>` unless the service also specifies `image:`, in
 > which case that name is used. Relative `build.context` paths are resolved against the compose file's
 > directory (sent to the daemon as `base_directory`), so `wslcc compose build` works correctly even when

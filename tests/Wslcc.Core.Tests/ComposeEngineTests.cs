@@ -355,11 +355,26 @@ public sealed class ComposeEngineTests
         provider.Existing.Add(new ContainerInfo("id2", "proj-redis", "redis:7", "running", Service: "redis"));
         var engine = new ComposeEngine(new[] { provider });
 
-        var results = await engine.DownAsync("proj", providerName: null);
+        var results = await engine.DownAsync("proj", file: null, providerName: null);
 
         Assert.Equal(new[] { "proj-web", "proj-redis" }, provider.Stopped);
         Assert.Equal(new[] { "proj-web", "proj-redis" }, provider.Removed);
         Assert.All(results, r => Assert.Equal("removed", r.Status));
+    }
+
+    [Fact]
+    public async Task Down_tears_down_in_reverse_dependency_order_when_a_file_is_provided()
+    {
+        var provider = new FakeProvider("docker", true);
+        provider.Existing.Add(new ContainerInfo("id1", "proj-redis", "redis:7", "running", Service: "redis"));
+        provider.Existing.Add(new ContainerInfo("id2", "proj-web", "nginx", "running", Service: "web"));
+        var engine = new ComposeEngine(new[] { provider });
+
+        await engine.DownAsync("proj", TwoServiceFile(), providerName: null);
+
+        // web depends_on redis, so the dependent (web) is stopped/removed before its dependency (redis).
+        Assert.Equal(new[] { "proj-web", "proj-redis" }, provider.Stopped);
+        Assert.Equal(new[] { "proj-web", "proj-redis" }, provider.Removed);
     }
 
     private static FakeProvider ProviderWithTwoContainers()
@@ -376,7 +391,7 @@ public sealed class ComposeEngineTests
         var provider = ProviderWithTwoContainers();
         var engine = new ComposeEngine(new[] { provider });
 
-        var results = await engine.StartAsync("proj", providerName: null, services: null);
+        var results = await engine.StartAsync("proj", file: null, providerName: null, services: null);
 
         Assert.Equal(new[] { "proj-web", "proj-redis" }, provider.Started);
         Assert.All(results, r => Assert.Equal("started", r.Status));
@@ -388,7 +403,7 @@ public sealed class ComposeEngineTests
         var provider = ProviderWithTwoContainers();
         var engine = new ComposeEngine(new[] { provider });
 
-        var results = await engine.StartAsync("proj", providerName: null, services: new[] { "web" });
+        var results = await engine.StartAsync("proj", file: null, providerName: null, services: new[] { "web" });
 
         Assert.Equal(new[] { "proj-web" }, provider.Started);
         var result = Assert.Single(results);
@@ -402,7 +417,7 @@ public sealed class ComposeEngineTests
         provider.FailContainer = "proj-redis";
         var engine = new ComposeEngine(new[] { provider });
 
-        var results = await engine.StopAsync("proj", providerName: null, services: null);
+        var results = await engine.StopAsync("proj", file: null, providerName: null, services: null);
 
         Assert.Equal(new[] { "proj-web" }, provider.Stopped);
         Assert.Equal(2, results.Count);
@@ -416,10 +431,75 @@ public sealed class ComposeEngineTests
         var provider = ProviderWithTwoContainers();
         var engine = new ComposeEngine(new[] { provider });
 
-        var results = await engine.RestartAsync("proj", providerName: null, services: null);
+        var results = await engine.RestartAsync("proj", file: null, providerName: null, services: null);
 
         Assert.Equal(new[] { "proj-web", "proj-redis" }, provider.Restarted);
         Assert.All(results, r => Assert.Equal("restarted", r.Status));
+    }
+
+    [Fact]
+    public async Task Start_orders_containers_by_dependency_when_a_file_is_provided()
+    {
+        // Containers are listed web-then-redis, but web depends_on redis.
+        var provider = ProviderWithTwoContainers();
+        var engine = new ComposeEngine(new[] { provider });
+
+        await engine.StartAsync("proj", TwoServiceFile(), providerName: null, services: null);
+
+        Assert.Equal(new[] { "proj-redis", "proj-web" }, provider.Started);
+    }
+
+    [Fact]
+    public async Task Stop_orders_containers_in_reverse_dependency_when_a_file_is_provided()
+    {
+        var provider = ProviderWithTwoContainers();
+        var engine = new ComposeEngine(new[] { provider });
+
+        await engine.StopAsync("proj", TwoServiceFile(), providerName: null, services: null);
+
+        // Teardown reverses the order: the dependent (web) stops before its dependency (redis).
+        Assert.Equal(new[] { "proj-web", "proj-redis" }, provider.Stopped);
+    }
+
+    [Fact]
+    public async Task Start_rejects_an_unknown_service_name()
+    {
+        var provider = ProviderWithTwoContainers();
+        var engine = new ComposeEngine(new[] { provider });
+
+        var ex = await Assert.ThrowsAsync<ProviderException>(
+            () => engine.StartAsync("proj", TwoServiceFile(), providerName: null, services: new[] { "web", "ghost" }));
+
+        Assert.Contains("ghost", ex.Message);
+        Assert.Empty(provider.Started);
+    }
+
+    [Fact]
+    public async Task Start_validates_against_existing_containers_when_no_file_is_provided()
+    {
+        var provider = ProviderWithTwoContainers();
+        var engine = new ComposeEngine(new[] { provider });
+
+        var ex = await Assert.ThrowsAsync<ProviderException>(
+            () => engine.StartAsync("proj", file: null, providerName: null, services: new[] { "ghost" }));
+
+        Assert.Contains("ghost", ex.Message);
+        Assert.Empty(provider.Started);
+    }
+
+    [Fact]
+    public async Task GetLogs_rejects_an_unknown_service_name()
+    {
+        var provider = ProviderWithTwoContainers();
+        var engine = new ComposeEngine(new[] { provider });
+
+        await Assert.ThrowsAsync<ProviderException>(async () =>
+        {
+            await foreach (var _ in engine.GetLogsAsync(
+                "proj", TwoServiceFile(), providerName: null, services: new[] { "ghost" }, follow: false, tail: null))
+            {
+            }
+        });
     }
 
     [Fact]
@@ -466,6 +546,19 @@ public sealed class ComposeEngineTests
         Assert.Contains(results, r => r.Service == "web" && r.Status == "pulled");
         Assert.Contains(results, r => r.Service == "redis" && r.Status == "failed" && r.Error!.Contains("redis:7"));
         Assert.Contains(results, r => r.Service == "nolimage" && r.Status == "failed");
+    }
+
+    [Fact]
+    public async Task Pull_rejects_an_unknown_service_name()
+    {
+        var provider = new FakeProvider("docker", true);
+        var engine = new ComposeEngine(new[] { provider });
+
+        var ex = await Assert.ThrowsAsync<ProviderException>(
+            () => engine.PullAsync(TwoServiceFile(), providerName: null, services: new[] { "web", "ghost" }));
+
+        Assert.Contains("ghost", ex.Message);
+        Assert.Empty(provider.EnsuredImages);
     }
 
     private static ComposeFile FileWithBuildableService(string? image = null)
@@ -538,6 +631,19 @@ public sealed class ComposeEngineTests
     }
 
     [Fact]
+    public async Task Build_rejects_an_unknown_service_name()
+    {
+        var provider = new FakeProvider("docker", true);
+        var engine = new ComposeEngine(new[] { provider });
+
+        var ex = await Assert.ThrowsAsync<ProviderException>(
+            () => engine.BuildAsync("proj", FileWithBuildableService(), providerName: null, baseDirectory: null, services: new[] { "ghost" }));
+
+        Assert.Contains("ghost", ex.Message);
+        Assert.Empty(provider.BuildSpecs);
+    }
+
+    [Fact]
     public async Task GetLogs_merges_lines_from_every_container_tagged_by_service()
     {
         var provider = ProviderWithTwoContainers();
@@ -546,7 +652,7 @@ public sealed class ComposeEngineTests
         var engine = new ComposeEngine(new[] { provider });
 
         var lines = new List<ServiceLogLine>();
-        await foreach (var line in engine.GetLogsAsync("proj", providerName: null, services: null, follow: false, tail: null))
+        await foreach (var line in engine.GetLogsAsync("proj", file: null, providerName: null, services: null, follow: false, tail: null))
         {
             lines.Add(line);
         }
@@ -566,7 +672,7 @@ public sealed class ComposeEngineTests
         var engine = new ComposeEngine(new[] { provider });
 
         var lines = new List<ServiceLogLine>();
-        await foreach (var line in engine.GetLogsAsync("proj", providerName: null, services: new[] { "redis" }, follow: false, tail: null))
+        await foreach (var line in engine.GetLogsAsync("proj", file: null, providerName: null, services: new[] { "redis" }, follow: false, tail: null))
         {
             lines.Add(line);
         }
@@ -582,7 +688,7 @@ public sealed class ComposeEngineTests
         var engine = new ComposeEngine(new[] { provider });
 
         var lines = new List<ServiceLogLine>();
-        await foreach (var line in engine.GetLogsAsync("proj", providerName: null, services: null, follow: false, tail: null))
+        await foreach (var line in engine.GetLogsAsync("proj", file: null, providerName: null, services: null, follow: false, tail: null))
         {
             lines.Add(line);
         }
