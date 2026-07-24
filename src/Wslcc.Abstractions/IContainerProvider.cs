@@ -23,6 +23,9 @@ public interface IContainerProvider
     /// </summary>
     Task EnsureImageAsync(string image, bool alwaysPull, CancellationToken cancellationToken = default);
 
+    /// <summary>Returns whether an image is already present locally (no pulling).</summary>
+    Task<bool> ImageExistsAsync(string image, CancellationToken cancellationToken = default);
+
     /// <summary>Builds an image from a Dockerfile, tagging it as <see cref="ImageBuildSpec.Tag"/>.</summary>
     Task BuildImageAsync(ImageBuildSpec spec, CancellationToken cancellationToken = default);
 

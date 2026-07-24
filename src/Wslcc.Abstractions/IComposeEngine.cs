@@ -22,14 +22,18 @@ public interface IComposeEngine
 
     /// <summary>
     /// Creates and starts containers for every service, in dependency order. Existing containers with
-    /// the same name are recreated. Never throws for a single service failure; the outcome is captured
-    /// per service.
+    /// the same name are recreated. A service that declares a <c>build:</c> section is built according to
+    /// <paramref name="buildPolicy"/> (relative build contexts resolve against
+    /// <paramref name="baseDirectory"/>). Never throws for a single service failure; the outcome is
+    /// captured per service.
     /// </summary>
     Task<IReadOnlyList<ServiceOperationResult>> UpAsync(
         string projectName,
         ComposeFile file,
         string? providerName,
         bool pull,
+        BuildPolicy buildPolicy,
+        string? baseDirectory,
         CancellationToken cancellationToken = default);
 
     /// <summary>Stops and removes all containers belonging to the project.</summary>

@@ -80,8 +80,16 @@ public sealed class WslccGrpcService : global::Wslcc.Grpc.Contracts.Wslcc.WslccB
 
         var project = ProjectNames.Resolve(request.ProjectName, file, request.DefaultProjectName);
 
+        var buildPolicy = request.BuildPolicy switch
+        {
+            global::Wslcc.Grpc.Contracts.BuildPolicy.Always => global::Wslcc.Abstractions.BuildPolicy.Always,
+            global::Wslcc.Grpc.Contracts.BuildPolicy.Never => global::Wslcc.Abstractions.BuildPolicy.Never,
+            _ => global::Wslcc.Abstractions.BuildPolicy.Auto,
+        };
+
         var results = await Guard(() =>
-            _engine.UpAsync(project, file, NullIfEmpty(request.Provider), request.Pull, context.CancellationToken))
+            _engine.UpAsync(
+                project, file, NullIfEmpty(request.Provider), request.Pull, buildPolicy, NullIfEmpty(request.BaseDirectory), context.CancellationToken))
             .ConfigureAwait(false);
 
         var response = new UpResponse { ProjectName = project };

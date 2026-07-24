@@ -16,6 +16,14 @@ public sealed class ComposeUpCommand : AsyncCommand<ComposeUpCommand.Settings>
         [Description("Always pull images before starting.")]
         public bool Pull { get; set; }
 
+        [CommandOption("--build")]
+        [Description("Build images for services with a 'build:' section before starting, even if the image already exists.")]
+        public bool Build { get; set; }
+
+        [CommandOption("--no-build")]
+        [Description("Do not build any images; fail if a service's image is missing.")]
+        public bool NoBuild { get; set; }
+
         [CommandOption("-d|--detach")]
         [Description("Run containers in the background (default; foreground mode is not implemented yet).")]
         public bool Detach { get; set; } = true;
@@ -23,6 +31,12 @@ public sealed class ComposeUpCommand : AsyncCommand<ComposeUpCommand.Settings>
 
     protected override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
+        if (settings.Build && settings.NoBuild)
+        {
+            AnsiConsole.MarkupLine("[red]--build and --no-build cannot be used together.[/]");
+            return 1;
+        }
+
         if (!ComposeFiles.TryResolve(settings, out var inputs, out var loadError))
         {
             AnsiConsole.MarkupLine(loadError);
@@ -42,6 +56,10 @@ public sealed class ComposeUpCommand : AsyncCommand<ComposeUpCommand.Settings>
             ComposeYaml = inputs.Yaml,
             Provider = settings.Provider ?? string.Empty,
             Pull = settings.Pull,
+            BaseDirectory = inputs.ProjectDirectory,
+            BuildPolicy = settings.Build ? BuildPolicy.Always
+                : settings.NoBuild ? BuildPolicy.Never
+                : BuildPolicy.Auto,
         };
 
         try

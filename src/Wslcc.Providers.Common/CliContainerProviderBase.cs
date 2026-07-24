@@ -23,18 +23,25 @@ public abstract class CliContainerProviderBase : IContainerProvider
             throw new ProviderException("No image specified.");
         }
 
-        if (!alwaysPull)
+        if (!alwaysPull && await ImageExistsAsync(image, cancellationToken).ConfigureAwait(false))
         {
-            var inspect = await TryRunAsync(CliCommandBuilder.BuildImageInspectArguments(image), cancellationToken)
-                .ConfigureAwait(false);
-            if (inspect is { Success: true })
-            {
-                return;
-            }
+            return;
         }
 
         var pull = await TryRunAsync(CliCommandBuilder.BuildPullArguments(image), cancellationToken).ConfigureAwait(false);
         EnsureSuccess(pull, $"pull image '{image}'");
+    }
+
+    public async Task<bool> ImageExistsAsync(string image, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(image))
+        {
+            return false;
+        }
+
+        var inspect = await TryRunAsync(CliCommandBuilder.BuildImageInspectArguments(image), cancellationToken)
+            .ConfigureAwait(false);
+        return inspect is { Success: true };
     }
 
     public async Task BuildImageAsync(ImageBuildSpec spec, CancellationToken cancellationToken = default)

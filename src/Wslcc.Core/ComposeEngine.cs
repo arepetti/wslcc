@@ -36,6 +36,8 @@ public sealed class ComposeEngine : IComposeEngine
         ComposeFile file,
         string? providerName,
         bool pull,
+        BuildPolicy buildPolicy,
+        string? baseDirectory,
         CancellationToken cancellationToken = default)
     {
         var provider = ResolveProvider(providerName);
@@ -45,20 +47,12 @@ public sealed class ComposeEngine : IComposeEngine
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            if (string.IsNullOrWhiteSpace(service.Image))
-            {
-                var reason = service.Build is not null
-                    ? "building images is not supported yet; specify an 'image'"
-                    : "no 'image' specified";
-                results.Add(new ServiceOperationResult(service.Name, "failed", Error: reason));
-                continue;
-            }
-
             try
             {
-                await provider.EnsureImageAsync(service.Image!, pull, cancellationToken).ConfigureAwait(false);
+                var image = await PrepareServiceImageAsync(provider, projectName, service, baseDirectory, pull, buildPolicy, cancellationToken)
+                    .ConfigureAwait(false);
 
-                var spec = ToRunSpec(projectName, service);
+                var spec = ToRunSpec(projectName, service, image);
                 await TryRemoveExistingAsync(provider, spec.Name, cancellationToken).ConfigureAwait(false);
 
                 var id = await provider.RunContainerAsync(spec, cancellationToken).ConfigureAwait(false);
@@ -71,6 +65,69 @@ public sealed class ComposeEngine : IComposeEngine
         }
 
         return results;
+    }
+
+    /// <summary>
+    /// Resolves the image to run for a service and makes sure it is available. A <c>build:</c> service is
+    /// built (tagged as its <c>image:</c> or <c>&lt;project&gt;-&lt;service&gt;</c>) according to
+    /// <paramref name="buildPolicy"/>: <see cref="BuildPolicy.Always"/> rebuilds every time,
+    /// <see cref="BuildPolicy.Never"/> fails when the image is missing, and <see cref="BuildPolicy.Auto"/>
+    /// builds only when it is missing (matching docker-compose's default <c>up</c>). A service that only
+    /// references an image has it pulled if missing (or always when <paramref name="pull"/> is set).
+    /// Returns the image the container should run; throws <see cref="ProviderException"/> when nothing
+    /// runnable is defined.
+    /// </summary>
+    private static async Task<string> PrepareServiceImageAsync(
+        IContainerProvider provider,
+        string projectName,
+        ServiceSpec service,
+        string? baseDirectory,
+        bool pull,
+        BuildPolicy buildPolicy,
+        CancellationToken cancellationToken)
+    {
+        if (service.Build is not null)
+        {
+            var (spec, error) = CreateBuildSpec(projectName, service, baseDirectory);
+            if (spec is null)
+            {
+                throw new ProviderException(error!);
+            }
+
+            switch (buildPolicy)
+            {
+                case BuildPolicy.Always:
+                    await provider.BuildImageAsync(spec, cancellationToken).ConfigureAwait(false);
+                    break;
+
+                case BuildPolicy.Never:
+                    if (!await provider.ImageExistsAsync(spec.Tag, cancellationToken).ConfigureAwait(false))
+                    {
+                        throw new ProviderException(
+                            $"image '{spec.Tag}' is not present and --no-build was set; run 'wslcc compose build' first");
+                    }
+
+                    break;
+
+                default:
+                    if (!await provider.ImageExistsAsync(spec.Tag, cancellationToken).ConfigureAwait(false))
+                    {
+                        await provider.BuildImageAsync(spec, cancellationToken).ConfigureAwait(false);
+                    }
+
+                    break;
+            }
+
+            return spec.Tag;
+        }
+
+        if (string.IsNullOrWhiteSpace(service.Image))
+        {
+            throw new ProviderException("no 'image' or 'build:' section specified");
+        }
+
+        await provider.EnsureImageAsync(service.Image!, pull, cancellationToken).ConfigureAwait(false);
+        return service.Image!;
     }
 
     public async Task<IReadOnlyList<ServiceOperationResult>> DownAsync(
@@ -200,26 +257,11 @@ public sealed class ComposeEngine : IComposeEngine
                 continue; // nothing to build for services that only reference a pre-built image
             }
 
-            var context = ResolveBuildContext(service.Build.Context, baseDirectory);
-            if (context is null)
+            var (spec, error) = CreateBuildSpec(projectName, service, baseDirectory);
+            if (spec is null)
             {
-                results.Add(new ServiceOperationResult(service.Name, "failed", Error: "'build' has no context"));
+                results.Add(new ServiceOperationResult(service.Name, "failed", Error: error));
                 continue;
-            }
-
-            var spec = new ImageBuildSpec
-            {
-                Context = context,
-                Dockerfile = service.Build.Dockerfile,
-                Target = service.Build.Target,
-                Tag = string.IsNullOrWhiteSpace(service.Image)
-                    ? WslccLabels.ContainerName(projectName, service.Name)
-                    : service.Image!,
-            };
-
-            foreach (var arg in service.Build.Args)
-            {
-                spec.Args[arg.Key] = arg.Value;
             }
 
             try
@@ -234,6 +276,41 @@ public sealed class ComposeEngine : IComposeEngine
         }
 
         return results;
+    }
+
+    /// <summary>
+    /// Builds the <see cref="ImageBuildSpec"/> for a service's <c>build:</c> section, resolving the build
+    /// context against <paramref name="baseDirectory"/> and tagging the image as the service's
+    /// <c>image:</c> (or <c>&lt;project&gt;-&lt;service&gt;</c> when none is given). Returns a
+    /// <c>null</c> spec with an error message when the build section has no usable context.
+    /// </summary>
+    private static (ImageBuildSpec? Spec, string? Error) CreateBuildSpec(
+        string projectName,
+        ServiceSpec service,
+        string? baseDirectory)
+    {
+        var context = ResolveBuildContext(service.Build!.Context, baseDirectory);
+        if (context is null)
+        {
+            return (null, "'build' has no context");
+        }
+
+        var spec = new ImageBuildSpec
+        {
+            Context = context,
+            Dockerfile = service.Build.Dockerfile,
+            Target = service.Build.Target,
+            Tag = string.IsNullOrWhiteSpace(service.Image)
+                ? WslccLabels.ContainerName(projectName, service.Name)
+                : service.Image!,
+        };
+
+        foreach (var arg in service.Build.Args)
+        {
+            spec.Args[arg.Key] = arg.Value;
+        }
+
+        return (spec, null);
     }
 
     /// <summary>
@@ -394,11 +471,11 @@ public sealed class ComposeEngine : IComposeEngine
         }
     }
 
-    private static ContainerRunSpec ToRunSpec(string projectName, ServiceSpec service)
+    private static ContainerRunSpec ToRunSpec(string projectName, ServiceSpec service, string image)
     {
         var spec = new ContainerRunSpec
         {
-            Image = service.Image ?? string.Empty,
+            Image = image,
             Name = WslccLabels.ContainerName(projectName, service.Name),
             Restart = service.Restart,
             Detach = true,

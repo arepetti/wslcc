@@ -8,7 +8,7 @@ WSLCC-specific commands. `wslcc compose ps` is the same token count as `docker c
 | Docker | WSLCC | Status |
 | --- | --- | --- |
 | `docker compose version` | `wslcc compose version` | Implemented (`--short`, `--format json\|pretty`) |
-| `docker compose up` | `wslcc compose up` | Implemented (detached; `-f`, `-p`, `--pull`) |
+| `docker compose up` | `wslcc compose up` | Implemented (detached; `-f`, `-p`, `--pull`, `--build`, `--no-build`; auto-builds `build:` services when their image is missing) |
 | `docker compose down` | `wslcc compose down` | Implemented (`-f`, `-p`) |
 | `docker compose ps` | `wslcc compose ps` | Implemented (`-f`, `-p`, `-a`) |
 | `docker compose start` | `wslcc compose start` | Implemented (`-f`, `-p`, `[SERVICES]`) |
@@ -43,6 +43,8 @@ Applied to `up`, `down`, `ps`, `start`, `stop`, `restart`, `pull`, `build`, `log
 | `--env-file <path>` | Environment file for `${VAR}` interpolation. Defaults to `.env` in the project directory when present. |
 | `--project-directory <path>` | Alternate project directory (default: the first compose file's directory). Sets the default `.env` location, the `build.context` base, and the default project name. |
 | `--pull` | (`up`) Always pull images before starting. |
+| `--build` | (`up`) Always (re)build services with a `build:` section before starting, even if the image already exists. Mutually exclusive with `--no-build`. |
+| `--no-build` | (`up`) Never build; fail a `build:` service whose image is missing instead of building it. Mutually exclusive with `--build`. |
 | `-a`, `--all` | (`ps`) Include stopped containers. |
 | `[SERVICES]` | (`start`, `stop`, `restart`, `pull`, `build`, `logs`) Optional service names to target. Defaults to every matching service. |
 | `--follow` | (`logs`) Keep streaming new log output; stop with Ctrl+C. No `-f` short form since `-f` is already `--file`. |
@@ -73,6 +75,11 @@ Applied to `up`, `down`, `ps`, `start`, `stop`, `restart`, `pull`, `build`, `log
 > which case that name is used. Relative `build.context` paths are resolved against the compose file's
 > directory (sent to the daemon as `base_directory`), so `wslcc compose build` works correctly even when
 > the daemon is a separate long-running process with a different current directory.
+
+> `up` auto-builds any service with a `build:` section when its target image (the same `<project>-<service>`
+> or `image:` tag `build` would use) is not present locally, mirroring `docker compose up`; if the image
+> already exists it is reused. Pass `--build` to force a rebuild every time, or `--no-build` to skip
+> building entirely (a `build:` service whose image is missing then fails instead of being built).
 
 > `logs` merges output from every matching container (like `docker compose logs`), tagging each line
 > with its service name (`<service> | <line>`). It uses a server-streaming RPC, so `--follow` keeps the

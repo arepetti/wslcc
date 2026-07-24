@@ -81,12 +81,27 @@ message Container {
   string project = 8;
 }
 
+// Controls whether `up` (re)builds services that declare a `build:` section.
+enum BuildPolicy {
+  // Build only when the target image is not present locally (default; matches `docker compose up`).
+  BUILD_POLICY_AUTO = 0;
+  // `--build`: always (re)build before starting.
+  BUILD_POLICY_ALWAYS = 1;
+  // `--no-build`: never build; fail if the image is missing.
+  BUILD_POLICY_NEVER = 2;
+}
+
 message UpRequest {
   string project_name = 1;
   string default_project_name = 2;
   string compose_yaml = 3;
   string provider = 4;
   bool pull = 5;
+  // Absolute directory containing the compose file, used to resolve relative build contexts when a
+  // service with a 'build:' section is auto-built because its image is missing.
+  string base_directory = 6;
+  // Whether a service's 'build:' section is (re)built on `up`.
+  BuildPolicy build_policy = 7;
 }
 
 message UpResponse {

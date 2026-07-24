@@ -19,9 +19,6 @@ Tracked, intentionally-deferred work. See [roadmap.md](roadmap.md) for the big p
   `depends_on` ordering the way `up`/`down` do; requesting an unknown service name is silently a no-op
   rather than an error (`pull`/`build` share the "unknown service name is ignored" gap). Honor ordering
   and reject unknown service names.
-- Auto-build for `up`: `up` requires services to specify an `image:` and fails on `build:`-only services
-  ("building images is not supported yet"). Build automatically when an image is missing and a `build:`
-  section is present (today you must run `wslcc compose build` first).
 - Foreground/attached `up`: `up` runs detached only; add an attached mode with streamed logs. Also
   consider streaming per-service progress for the remaining unary RPCs
   (`Up`/`Down`/`Ps`/`Start`/`Stop`/`Restart`/`Pull`/`Build`) instead of returning a single batch result.

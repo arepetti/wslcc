@@ -35,6 +35,9 @@ public sealed class ComposeEngineTests
 
         public List<ImageBuildSpec> BuildSpecs { get; } = new();
 
+        /// <summary>Images that <see cref="ImageExistsAsync"/> should report as already present locally.</summary>
+        public HashSet<string> ExistingImages { get; } = new(StringComparer.Ordinal);
+
         /// <summary>When set, the operation on this container name fails with a <see cref="ProviderException"/>.</summary>
         public string? FailContainer { get; set; }
 
@@ -57,6 +60,9 @@ public sealed class ComposeEngineTests
 
             return Task.CompletedTask;
         }
+
+        public Task<bool> ImageExistsAsync(string image, CancellationToken cancellationToken = default)
+            => Task.FromResult(ExistingImages.Contains(image));
 
         public Task BuildImageAsync(ImageBuildSpec spec, CancellationToken cancellationToken = default)
         {
@@ -191,7 +197,7 @@ public sealed class ComposeEngineTests
         var provider = new FakeProvider("docker", true);
         var engine = new ComposeEngine(new[] { provider });
 
-        var results = await engine.UpAsync("proj", TwoServiceFile(), providerName: null, pull: false);
+        var results = await engine.UpAsync("proj", TwoServiceFile(), providerName: null, pull: false, buildPolicy: BuildPolicy.Auto, baseDirectory: null);
 
         Assert.Equal(new[] { "redis", "web" }, provider.RunOrder);
         Assert.All(results, r => Assert.Equal("started", r.Status));
@@ -209,11 +215,136 @@ public sealed class ComposeEngineTests
         var file = new ComposeFile();
         file.Services["svc"] = new ServiceSpec { Name = "svc" };
 
-        var results = await engine.UpAsync("proj", file, providerName: null, pull: false);
+        var results = await engine.UpAsync("proj", file, providerName: null, pull: false, buildPolicy: BuildPolicy.Auto, baseDirectory: null);
 
         var result = Assert.Single(results);
         Assert.Equal("failed", result.Status);
         Assert.Empty(provider.RunOrder);
+    }
+
+    [Fact]
+    public async Task Up_auto_builds_a_build_only_service_then_runs_the_built_tag()
+    {
+        var provider = new FakeProvider("docker", true);
+        var engine = new ComposeEngine(new[] { provider });
+
+        var results = await engine.UpAsync("proj", FileWithBuildableService(), providerName: null, pull: false, buildPolicy: BuildPolicy.Auto, baseDirectory: null);
+
+        Assert.All(results, r => Assert.Equal("started", r.Status));
+
+        var built = Assert.Single(provider.BuildSpecs);
+        Assert.Equal("proj-web", built.Tag);
+
+        // The container for the build-only service runs the freshly built tag, not an empty image.
+        var web = provider.RunSpecs.Single(s => s.Labels[WslccLabels.Service] == "web");
+        Assert.Equal("proj-web", web.Image);
+
+        // Services that only reference an image are still pulled/ensured, never built.
+        Assert.Contains(provider.EnsuredImages, i => i.Image == "redis:7");
+    }
+
+    [Fact]
+    public async Task Up_skips_the_build_when_the_target_image_already_exists()
+    {
+        var provider = new FakeProvider("docker", true);
+        provider.ExistingImages.Add("proj-web");
+        var engine = new ComposeEngine(new[] { provider });
+
+        var results = await engine.UpAsync("proj", FileWithBuildableService(), providerName: null, pull: false, buildPolicy: BuildPolicy.Auto, baseDirectory: null);
+
+        Assert.All(results, r => Assert.Equal("started", r.Status));
+        Assert.Empty(provider.BuildSpecs);
+
+        var web = provider.RunSpecs.Single(s => s.Labels[WslccLabels.Service] == "web");
+        Assert.Equal("proj-web", web.Image);
+    }
+
+    [Fact]
+    public async Task Up_tags_the_auto_build_as_the_service_image_when_specified()
+    {
+        var provider = new FakeProvider("docker", true);
+        var engine = new ComposeEngine(new[] { provider });
+
+        await engine.UpAsync(
+            "proj", FileWithBuildableService(image: "myrepo/web:latest"), providerName: null, pull: false, buildPolicy: BuildPolicy.Auto, baseDirectory: null);
+
+        var built = Assert.Single(provider.BuildSpecs);
+        Assert.Equal("myrepo/web:latest", built.Tag);
+
+        var web = provider.RunSpecs.Single(s => s.Labels[WslccLabels.Service] == "web");
+        Assert.Equal("myrepo/web:latest", web.Image);
+    }
+
+    [Fact]
+    public async Task Up_resolves_the_auto_build_context_against_the_base_directory()
+    {
+        var provider = new FakeProvider("docker", true);
+        var engine = new ComposeEngine(new[] { provider });
+        var baseDir = Path.Combine(Path.GetTempPath(), "wslcc-up-project");
+
+        await engine.UpAsync("proj", FileWithBuildableService(), providerName: null, pull: false, buildPolicy: BuildPolicy.Auto, baseDirectory: baseDir);
+
+        var built = Assert.Single(provider.BuildSpecs);
+        Assert.Equal(Path.GetFullPath(Path.Combine(baseDir, "web")), built.Context);
+    }
+
+    [Fact]
+    public async Task Up_reports_a_build_failure_and_does_not_run_the_service()
+    {
+        var provider = new FakeProvider("docker", true);
+        provider.FailBuildTag = "proj-web";
+        var engine = new ComposeEngine(new[] { provider });
+
+        var results = await engine.UpAsync("proj", FileWithBuildableService(), providerName: null, pull: false, buildPolicy: BuildPolicy.Auto, baseDirectory: null);
+
+        Assert.Contains(results, r => r.Service == "web" && r.Status == "failed" && r.Error!.Contains("proj-web"));
+        Assert.DoesNotContain(provider.RunOrder, s => s == "web");
+        Assert.Contains(provider.RunOrder, s => s == "redis");
+    }
+
+    [Fact]
+    public async Task Up_with_build_policy_always_rebuilds_even_when_the_image_exists()
+    {
+        var provider = new FakeProvider("docker", true);
+        provider.ExistingImages.Add("proj-web");
+        var engine = new ComposeEngine(new[] { provider });
+
+        var results = await engine.UpAsync(
+            "proj", FileWithBuildableService(), providerName: null, pull: false, buildPolicy: BuildPolicy.Always, baseDirectory: null);
+
+        Assert.All(results, r => Assert.Equal("started", r.Status));
+        var built = Assert.Single(provider.BuildSpecs);
+        Assert.Equal("proj-web", built.Tag);
+    }
+
+    [Fact]
+    public async Task Up_with_build_policy_never_runs_the_existing_image_without_building()
+    {
+        var provider = new FakeProvider("docker", true);
+        provider.ExistingImages.Add("proj-web");
+        var engine = new ComposeEngine(new[] { provider });
+
+        var results = await engine.UpAsync(
+            "proj", FileWithBuildableService(), providerName: null, pull: false, buildPolicy: BuildPolicy.Never, baseDirectory: null);
+
+        Assert.All(results, r => Assert.Equal("started", r.Status));
+        Assert.Empty(provider.BuildSpecs);
+        var web = provider.RunSpecs.Single(s => s.Labels[WslccLabels.Service] == "web");
+        Assert.Equal("proj-web", web.Image);
+    }
+
+    [Fact]
+    public async Task Up_with_build_policy_never_fails_when_the_image_is_missing()
+    {
+        var provider = new FakeProvider("docker", true);
+        var engine = new ComposeEngine(new[] { provider });
+
+        var results = await engine.UpAsync(
+            "proj", FileWithBuildableService(), providerName: null, pull: false, buildPolicy: BuildPolicy.Never, baseDirectory: null);
+
+        Assert.Empty(provider.BuildSpecs);
+        Assert.Contains(results, r => r.Service == "web" && r.Status == "failed" && r.Error!.Contains("--no-build"));
+        Assert.DoesNotContain(provider.RunOrder, s => s == "web");
     }
 
     [Fact]
