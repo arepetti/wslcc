@@ -42,6 +42,8 @@ Applied to `up`, `down`, `ps`, `start`, `stop`, `restart`, `pull`, `build`, `log
 | `--profile <name>` | Activate a profile (repeatable; also read from `COMPOSE_PROFILES`, or by naming a service that carries the profile). Services with a `profiles:` list are only included when one of their profiles is active. |
 | `--env-file <path>` | Environment file for `${VAR}` interpolation. Defaults to `.env` in the project directory when present. |
 | `--project-directory <path>` | Alternate project directory (default: the first compose file's directory). Sets the default `.env` location, the `build.context` base, and the default project name. |
+| `--wslcc-host <uri>` | (all except `config`) Daemon endpoint. `npipe://<name>` (default) or `npipe://<server>/<name>` for a local pipe; `http(s)://host:port` for a remote daemon. wslcc-prefixed so it never collides with a standard `docker compose` option. |
+| `--wslcc-provider <name>` | (all except `config`) Target `wslc` or `docker` for this command. When omitted, the daemon's default provider is used. wslcc-prefixed so it never collides with a standard `docker compose` option. |
 | `--pull` | (`up`) Always pull images before starting. |
 | `--build` | (`up`) Always (re)build services with a `build:` section before starting, even if the image already exists. Mutually exclusive with `--no-build`. |
 | `--no-build` | (`up`) Never build; fail a `build:` service whose image is missing instead of building it. Mutually exclusive with `--build`. |
@@ -103,19 +105,35 @@ Applied to `up`, `down`, `ps`, `start`, `stop`, `restart`, `pull`, `build`, `log
 > not Docker Compose's own hash. `--resolve-image-digests` is not implemented, since `config` is offline
 > and pinning digests needs registry access.
 
-## Global options
+## Global option
 
-Available on every leaf command and supplied after the subcommand, e.g.
-`wslcc compose ps --host npipe://wslccd --provider docker`.
+`--no-color` is the only option on **every** leaf command (it needs no daemon or provider), supplied after
+the subcommand:
 
 | Option | Description |
 | --- | --- |
-| `-H`, `--host <uri>` | Daemon endpoint. `npipe://<name>` (default) or `npipe://<server>/<name>` for a local pipe; `http(s)://host:port` for a remote daemon. |
-| `--provider <name>` | Target `wslc` or `docker` for this command. When omitted, the daemon's default provider is used (configured in appsettings.json or via `wslcc daemon start --provider <name>`). |
 | `--no-color` | Disable colored output for the command. Also honored via the `NO_COLOR` environment variable. |
 
-> Normally you don't need `--provider` at all: set it once with `wslcc daemon start --provider docker`,
-> and every subsequent command uses that default. Use `--provider` only to override a single command.
+## Daemon endpoint and provider
+
+The daemon endpoint and provider are **not** global — they are scoped to the commands that use them, and the
+compose commands rename them to avoid clashing with standard `docker compose` options (wslcc mirrors the
+compose CLI, and `--host`/`--provider` are wslcc-specific).
+
+| Command family | Endpoint option | Provider option | Meaning of the provider option |
+| --- | --- | --- | --- |
+| `wslcc compose <up\|down\|ps\|start\|stop\|restart\|pull\|build\|logs\|version>` | `--wslcc-host <uri>` | `--wslcc-provider <name>` | Target this provider for this one command. |
+| `wslcc compose config` | — | — | Runs entirely client-side; contacts no daemon or provider. |
+| `wslcc version`, `wslcc daemon status\|stop` | `-H`, `--host <uri>` | — | (no provider option) |
+| `wslcc daemon start`, `wslcc daemon install` | `-H`, `--host <uri>` | `--provider <name>` | Persist this provider as the daemon's **default**. |
+| `wslcc daemon uninstall` | — | — | (neither) |
+
+Examples: `wslcc compose ps --wslcc-host npipe://wslccd --wslcc-provider docker`,
+`wslcc daemon start --provider docker`.
+
+> Normally you don't need `--wslcc-provider` at all: set the daemon's default once with
+> `wslcc daemon start --provider docker` (or `wslcc daemon install --provider docker`), and every
+> subsequent command uses that default. Use `--wslcc-provider` only to override a single command.
 
 > `--no-color` (and `NO_COLOR`) disables ANSI colors across all output, including the per-service prefix
 > that `wslcc compose logs` normally colors — this is the equivalent of `docker compose logs --no-color`.

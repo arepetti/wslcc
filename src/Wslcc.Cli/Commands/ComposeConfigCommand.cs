@@ -13,7 +13,7 @@ namespace Wslcc.Cli.Commands;
 /// </summary>
 public sealed class ComposeConfigCommand : Command<ComposeConfigCommand.Settings>
 {
-    public sealed class Settings : ComposeCommandSettings
+    public sealed class Settings : ComposeFileSettings
     {
         [CommandOption("--services")]
         [Description("Print the enabled service names instead of the full config.")]

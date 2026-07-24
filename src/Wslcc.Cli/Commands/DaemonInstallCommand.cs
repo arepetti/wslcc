@@ -19,7 +19,7 @@ public sealed class DaemonInstallCommand : AsyncCommand<DaemonInstallCommand.Set
         ["disabled"] = "disabled",
     };
 
-    public sealed class Settings : GlobalSettings
+    public sealed class Settings : DaemonProviderSettings
     {
         [CommandOption("--startup <TYPE>")]
         [Description("Service startup type: 'auto' (default), 'manual', or 'disabled'.")]

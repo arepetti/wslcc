@@ -28,7 +28,7 @@ internal static class ComposeFiles
     /// (e.g. <c>compose config</c>); warnings remain available via <see cref="ComposeInputs.Warnings"/>.
     /// </summary>
     public static bool TryResolve(
-        ComposeCommandSettings settings,
+        ComposeFileSettings settings,
         out ComposeInputs? inputs,
         out string error,
         IReadOnlyList<string>? targetedServices = null,
@@ -58,7 +58,7 @@ internal static class ComposeFiles
         }
     }
 
-    private static ComposeInputs? Resolve(ComposeCommandSettings settings, IReadOnlyList<string> targetedServices, bool interpolate)
+    private static ComposeInputs? Resolve(ComposeFileSettings settings, IReadOnlyList<string> targetedServices, bool interpolate)
     {
         var cwd = Directory.GetCurrentDirectory();
         var projectDirectory = string.IsNullOrWhiteSpace(settings.ProjectDirectory) ? null : Path.GetFullPath(settings.ProjectDirectory);

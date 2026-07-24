@@ -34,13 +34,15 @@ wslcc compose version
 wslcc daemon stop
 ```
 
-`wslcc` talks to `wslccd` over a named pipe by default (`npipe://wslccd`). Use `--host` to change transport:
+`wslcc` talks to `wslccd` over a named pipe by default (`npipe://wslccd`). Use `-H`/`--host` to change
+transport (the `compose` commands use `--wslcc-host`/`--wslcc-provider` so they don't clash with standard
+`docker compose` options):
 
 ```powershell
 wslcc --? ; # help
-wslcc version -H npipe://wslccd          # local named pipe (default)
-wslcc version -H http://remote-host:5211 # remote daemon over HTTP/2 (no auth yet)
-wslcc version --provider docker          # target a specific provider
+wslcc version -H npipe://wslccd                  # local named pipe (default)
+wslcc version -H http://remote-host:5211         # remote daemon over HTTP/2 (no auth yet)
+wslcc compose version --wslcc-provider docker    # target a specific provider
 ```
 
 ## Repository layout

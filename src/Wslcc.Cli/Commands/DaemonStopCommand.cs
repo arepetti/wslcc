@@ -5,9 +5,9 @@ using Wslcc.Client;
 namespace Wslcc.Cli.Commands;
 
 /// <summary><c>wslcc daemon stop</c>: asks the daemon to shut down gracefully via the Shutdown RPC.</summary>
-public sealed class DaemonStopCommand : AsyncCommand<GlobalSettings>
+public sealed class DaemonStopCommand : AsyncCommand<HostSettings>
 {
-    protected override async Task<int> ExecuteAsync(CommandContext context, GlobalSettings settings, CancellationToken cancellationToken)
+    protected override async Task<int> ExecuteAsync(CommandContext context, HostSettings settings, CancellationToken cancellationToken)
     {
         var endpoint = WslccEndpoint.Parse(settings.Host);
 

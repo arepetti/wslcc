@@ -9,9 +9,9 @@ namespace Wslcc.Cli.Commands;
 /// <c>wslcc daemon start</c>: launches <c>wslccd</c> as a detached per-user process and waits for it
 /// to accept connections. Only manages a local (named-pipe) daemon.
 /// </summary>
-public sealed class DaemonStartCommand : AsyncCommand<GlobalSettings>
+public sealed class DaemonStartCommand : AsyncCommand<DaemonProviderSettings>
 {
-    protected override async Task<int> ExecuteAsync(CommandContext context, GlobalSettings settings, CancellationToken cancellationToken)
+    protected override async Task<int> ExecuteAsync(CommandContext context, DaemonProviderSettings settings, CancellationToken cancellationToken)
     {
         var endpoint = WslccEndpoint.Parse(settings.Host);
         if (!endpoint.IsNamedPipe)

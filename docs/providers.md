@@ -3,8 +3,10 @@
 A provider is an implementation of `IContainerProvider` (in `Wslcc.Abstractions`). The core engine is
 provider-agnostic; the daemon registers the available providers and picks a default.
 
-Select a provider per command with `--provider <name>`; otherwise the daemon's configured
-`DefaultProvider` is used.
+Select a provider per compose command with `--wslcc-provider <name>`; otherwise the daemon's configured
+`DefaultProvider` is used. Set that default once with `wslcc daemon start --provider <name>` (or
+`wslcc daemon install --provider <name>`), where `--provider` configures the daemon rather than a single
+call.
 
 ## `wslc` — WSL containers
 

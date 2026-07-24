@@ -5,9 +5,9 @@ using Wslcc.Client;
 namespace Wslcc.Cli.Commands;
 
 /// <summary><c>wslcc daemon status</c>: reports whether the daemon responds and on which endpoint.</summary>
-public sealed class DaemonStatusCommand : AsyncCommand<GlobalSettings>
+public sealed class DaemonStatusCommand : AsyncCommand<HostSettings>
 {
-    protected override async Task<int> ExecuteAsync(CommandContext context, GlobalSettings settings, CancellationToken cancellationToken)
+    protected override async Task<int> ExecuteAsync(CommandContext context, HostSettings settings, CancellationToken cancellationToken)
     {
         var endpoint = WslccEndpoint.Parse(settings.Host);
         var ping = await DaemonClientHelper.TryPingAsync(settings.Host, cancellationToken: cancellationToken).ConfigureAwait(false);

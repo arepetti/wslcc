@@ -13,19 +13,13 @@ public class BranchSettings : CommandSettings
 }
 
 /// <summary>
-/// Options shared by every leaf command. Declared here (below <see cref="BranchSettings"/>) so they
-/// bind at the leaf level, i.e. after the subcommand.
+/// Options shared by <em>every</em> leaf command. Only the truly universal switches live here; the
+/// daemon endpoint and provider selection are declared by the command families that actually use them
+/// (see <see cref="HostSettings"/>, <see cref="DaemonProviderSettings"/> and
+/// <see cref="ComposeCommandSettings"/>) so they are not advertised on commands that ignore them.
 /// </summary>
 public class GlobalSettings : BranchSettings
 {
-    [CommandOption("-H|--host <URI>")]
-    [Description("Daemon endpoint. npipe://<name> (default) for a local pipe, or http(s)://host:port for a remote daemon.")]
-    public string? Host { get; set; }
-
-    [CommandOption("--provider <NAME>")]
-    [Description("Provider to target: 'wslc' or 'docker'. Defaults to the daemon's configured provider.")]
-    public string? Provider { get; set; }
-
     [CommandOption("--no-color")]
     [Description("Disable colored output. Also honored via the NO_COLOR environment variable.")]
     public bool NoColor { get; set; }

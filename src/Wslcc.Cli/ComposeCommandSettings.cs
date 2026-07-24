@@ -3,8 +3,11 @@ using Spectre.Console.Cli;
 
 namespace Wslcc.Cli;
 
-/// <summary>Shared options for compose commands that operate on a project/file.</summary>
-public class ComposeCommandSettings : GlobalSettings
+/// <summary>
+/// Compose-file options shared by every compose command, including the client-side <c>config</c>. These
+/// mirror <c>docker compose</c>'s own file/project options, so they keep the standard names.
+/// </summary>
+public class ComposeFileSettings : GlobalSettings
 {
     [CommandOption("-f|--file <PATH>")]
     [Description("Compose file(s). Repeatable; later files override earlier ones. Defaults to compose.yaml / docker-compose.yml in the current directory.")]
@@ -25,4 +28,21 @@ public class ComposeCommandSettings : GlobalSettings
     [CommandOption("--project-directory <PATH>")]
     [Description("Alternate project directory (default: the first compose file's directory). Sets the default '.env' location, build context base, and project name.")]
     public string? ProjectDirectory { get; set; }
+}
+
+/// <summary>
+/// Adds the daemon endpoint and per-command provider selection for the compose commands that reach the
+/// daemon (everything except the client-side <c>config</c>). These use the <c>--wslcc-</c> prefix so they
+/// never collide with a real <c>docker compose</c> option — wslcc aims to mirror the compose CLI, and
+/// <c>--host</c>/<c>--provider</c> are wslcc-specific, not standard compose flags.
+/// </summary>
+public class ComposeCommandSettings : ComposeFileSettings
+{
+    [CommandOption("--wslcc-host <URI>")]
+    [Description("Daemon endpoint. npipe://<name> (default) for a local pipe, or http(s)://host:port for a remote daemon.")]
+    public string? Host { get; set; }
+
+    [CommandOption("--wslcc-provider <NAME>")]
+    [Description("Provider to target for this command: 'wslc' or 'docker'. Defaults to the daemon's configured provider.")]
+    public string? Provider { get; set; }
 }

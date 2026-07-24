@@ -14,6 +14,16 @@ public sealed class ComposeVersionCommand : AsyncCommand<ComposeVersionCommand.S
 {
     public sealed class Settings : GlobalSettings
     {
+        // `compose version` reaches the daemon but takes no compose file, so it declares the wslcc-prefixed
+        // connection options itself rather than inheriting the file options from ComposeCommandSettings.
+        [CommandOption("--wslcc-host <URI>")]
+        [Description("Daemon endpoint. npipe://<name> (default) for a local pipe, or http(s)://host:port for a remote daemon.")]
+        public string? Host { get; set; }
+
+        [CommandOption("--wslcc-provider <NAME>")]
+        [Description("Provider to target: 'wslc' or 'docker'. Defaults to the daemon's configured provider.")]
+        public string? Provider { get; set; }
+
         [CommandOption("--short")]
         [Description("Print only the version string.")]
         public bool Short { get; set; }

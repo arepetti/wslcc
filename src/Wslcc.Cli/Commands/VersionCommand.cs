@@ -7,9 +7,9 @@ namespace Wslcc.Cli.Commands;
 /// Top-level <c>wslcc version</c>: reports the wslcc build, the daemon, and every provider's
 /// underlying tool version (analogous to <c>docker version</c>).
 /// </summary>
-public sealed class VersionCommand : AsyncCommand<GlobalSettings>
+public sealed class VersionCommand : AsyncCommand<HostSettings>
 {
-    protected override async Task<int> ExecuteAsync(CommandContext context, GlobalSettings settings, CancellationToken cancellationToken)
+    protected override async Task<int> ExecuteAsync(CommandContext context, HostSettings settings, CancellationToken cancellationToken)
     {
         AnsiConsole.MarkupLine($"[bold]wslcc[/] (CLI) {CliVersion.Value.EscapeMarkup()}");
 

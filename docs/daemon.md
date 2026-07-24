@@ -73,4 +73,5 @@ service; see [todo.md](todo.md).
 
 Locally, Kestrel listens on a named pipe (`ListenNamedPipe`) speaking HTTP/2 (h2c). The client builds a
 `GrpcChannel` whose `SocketsHttpHandler.ConnectCallback` opens a `NamedPipeClientStream`. For remote
-use, Kestrel additionally binds an HTTP/2 TCP endpoint and the client uses an `http(s)://` `--host`.
+use, Kestrel additionally binds an HTTP/2 TCP endpoint and the client uses an `http(s)://` endpoint
+(`--host` for `version`/`daemon` commands, `--wslcc-host` for `compose` commands).
