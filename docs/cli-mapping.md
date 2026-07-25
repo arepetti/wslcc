@@ -8,7 +8,7 @@ WSLCC-specific commands. `wslcc compose ps` is the same token count as `docker c
 | Docker | WSLCC | Status |
 | --- | --- | --- |
 | `docker compose version` | `wslcc compose version` | Implemented (`--short`, `--format json\|pretty`) |
-| `docker compose up` | `wslcc compose up` | Implemented (attached by default, `-d`/`--detach` to background; `-f`, `-p`, `--pull`, `--build`, `--no-build`; auto-builds `build:` services when their image is missing) |
+| `docker compose up` | `wslcc compose up` | Implemented (attached by default, `-d`/`--detach` to background; `-f`, `-p`, `--pull`, `--build`, `--no-build`; auto-builds `build:` services when their image is missing; honors `depends_on` conditions and applies service healthchecks) |
 | `docker compose down` | `wslcc compose down` | Implemented (`-f`, `-p`) |
 | `docker compose ps` | `wslcc compose ps` | Implemented (`-f`, `-p`, `-a`) |
 | `docker compose start` | `wslcc compose start` | Implemented (`-f`, `-p`, `[SERVICES]`) |
@@ -83,6 +83,15 @@ Applied to `up`, `down`, `ps`, `start`, `stop`, `restart`, `pull`, `build`, `log
 > does not define (or, with `-p` only, that has no container) is rejected with `no such service: <name>`
 > instead of being silently ignored; `pull` and `build` reject unknown service names against the compose
 > file the same way.
+
+> Beyond ordering, `up` honors `depends_on` **conditions**: `service_started` (the default) only
+> guarantees start order, `service_healthy` waits for the dependency's healthcheck to pass, and
+> `service_completed_successfully` waits for it to exit with code `0`. A service whose required
+> dependency fails to start, becomes unhealthy, or exits non-zero is not started and is reported as
+> failed. `service_healthy` needs the dependency to actually have a healthcheck — a `healthcheck:` in the
+> compose file (applied to the container via `--health-*` run flags) or one baked into its image;
+> otherwise the dependent fails with a clear message. A `healthcheck: { disable: true }` (or `test:
+> ["NONE"]`) turns healthchecks off.
 
 > `build` tags the built image as `<project>-<service>` unless the service also specifies `image:`, in
 > which case that name is used. Relative `build.context` paths are resolved against the compose file's

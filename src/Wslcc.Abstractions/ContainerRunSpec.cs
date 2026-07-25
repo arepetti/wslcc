@@ -21,6 +21,9 @@ public sealed class ContainerRunSpec
 
     public string? Restart { get; set; }
 
+    /// <summary>Optional healthcheck to apply to the container (from the service's <c>healthcheck:</c>).</summary>
+    public ContainerHealthCheck? HealthCheck { get; set; }
+
     /// <summary>Run detached (default true for compose up).</summary>
     public bool Detach { get; set; } = true;
 }

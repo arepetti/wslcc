@@ -82,6 +82,16 @@ public abstract class CliContainerProviderBase : IContainerProvider
         EnsureSuccess(result, $"remove container '{container}'");
     }
 
+    public async Task<ContainerRuntimeState?> GetContainerStateAsync(string container, CancellationToken cancellationToken = default)
+    {
+        var result = await TryRunAsync(CliCommandBuilder.BuildInspectStateArguments(container), cancellationToken)
+            .ConfigureAwait(false);
+
+        // A missing container (inspect fails) is reported as "no state" rather than an error, so callers
+        // can distinguish "not created yet" from a genuine failure.
+        return result is { Success: true } ? CliStateParser.Parse(result.StandardOutput) : null;
+    }
+
     public async Task<IReadOnlyList<ContainerInfo>> ListContainersAsync(
         string? projectName,
         bool all,

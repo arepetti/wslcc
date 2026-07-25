@@ -45,6 +45,13 @@ public interface IContainerProvider
     Task RemoveContainerAsync(string container, bool force, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Returns the current runtime state (status, health, exit code) of a container, or <c>null</c> when
+    /// it does not exist. Used to evaluate <c>depends_on</c> conditions (<c>service_healthy</c>,
+    /// <c>service_completed_successfully</c>).
+    /// </summary>
+    Task<ContainerRuntimeState?> GetContainerStateAsync(string container, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Lists containers managed by WSLCC. When <paramref name="projectName"/> is provided, only that
     /// project's containers are returned.
     /// </summary>

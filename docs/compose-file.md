@@ -18,11 +18,26 @@ most-used keys:
 
 - `services.<name>`: `image`, `build` (string shorthand or `{ context, dockerfile, target, args }`),
   `container_name`, `command`, `entrypoint`, `environment` (list `KEY=VALUE` or map), `env_file`,
-  `ports`, `volumes`, `depends_on` (list or map), `networks` (list or map), `labels`, `restart`,
-  `working_dir`, `user`.
+  `ports`, `volumes`, `depends_on` (list or map, with `condition` / `required`), `healthcheck`
+  (`test`, `interval`, `timeout`, `retries`, `start_period`, `disable`), `networks` (list or map),
+  `labels`, `restart`, `working_dir`, `user`.
 - Top-level `name`, `networks`, `volumes` (with `driver`, `external`).
 
 Unknown keys are ignored rather than causing a failure.
+
+### Startup order and health
+
+`up` starts services in `depends_on` order and honors the long-form **conditions**:
+
+- `service_started` (the default, and what the short list form means) — only orders startup.
+- `service_healthy` — waits until the dependency's healthcheck passes. The dependency must have a
+  healthcheck, either a `healthcheck:` in the compose file (WSLCC applies it to the container via the
+  runtime's `--health-*` flags) or one baked into its image; otherwise the dependent fails.
+- `service_completed_successfully` — waits until the dependency exits with code `0`.
+
+A service whose required dependency fails to start, reports unhealthy, or exits non-zero is not started
+(and is reported as failed, along with its own dependents). `healthcheck: { disable: true }` (or
+`test: ["NONE"]`) turns the healthcheck off.
 
 ## Resolution features
 
@@ -83,8 +98,8 @@ Docker Compose's own hash); `--resolve-image-digests` is not implemented because
 ## Not yet covered
 
 Full Compose specification fidelity is still planned (see [todo.md](todo.md)), including:
-`configs`/`secrets`, healthchecks, and `deploy` settings. Ports and volumes are currently kept as raw
-strings rather than fully structured objects.
+`configs`/`secrets` and `deploy` settings. Ports and volumes are currently kept as raw strings rather
+than fully structured objects.
 
 ## Example
 

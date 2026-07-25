@@ -26,7 +26,9 @@ public sealed class ServiceSpec
 
     public IList<string> Volumes { get; set; } = new List<string>();
 
-    public IList<string> DependsOn { get; set; } = new List<string>();
+    public IList<ServiceDependency> DependsOn { get; set; } = new List<ServiceDependency>();
+
+    public HealthCheckSpec? HealthCheck { get; set; }
 
     public IList<string> Networks { get; set; } = new List<string>();
 

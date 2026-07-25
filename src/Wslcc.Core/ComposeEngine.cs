@@ -42,13 +42,29 @@ public sealed class ComposeEngine : IComposeEngine
     {
         var provider = ResolveProvider(providerName);
         var results = new List<ServiceOperationResult>();
+        var startedContainers = new Dictionary<string, string>(StringComparer.Ordinal);
+        var failed = new HashSet<string>(StringComparer.Ordinal);
 
         foreach (var service in OrderServices(file))
         {
             cancellationToken.ThrowIfCancellationRequested();
 
+            // A service whose required dependency did not come up is not started (docker-compose aborts
+            // dependents), and it in turn fails its own dependents.
+            var brokenDependency = service.DependsOn.FirstOrDefault(d => d.Required && failed.Contains(d.Name));
+            if (brokenDependency is not null)
+            {
+                results.Add(new ServiceOperationResult(
+                    service.Name, "failed", Error: $"dependency '{brokenDependency.Name}' failed to start"));
+                failed.Add(service.Name);
+                continue;
+            }
+
             try
             {
+                await WaitForDependenciesAsync(provider, projectName, file, service, startedContainers, cancellationToken)
+                    .ConfigureAwait(false);
+
                 var image = await PrepareServiceImageAsync(provider, projectName, service, baseDirectory, pull, buildPolicy, cancellationToken)
                     .ConfigureAwait(false);
 
@@ -56,16 +72,128 @@ public sealed class ComposeEngine : IComposeEngine
                 await TryRemoveExistingAsync(provider, spec.Name, cancellationToken).ConfigureAwait(false);
 
                 var id = await provider.RunContainerAsync(spec, cancellationToken).ConfigureAwait(false);
+                startedContainers[service.Name] = spec.Name;
                 results.Add(new ServiceOperationResult(service.Name, "started", id));
             }
             catch (ProviderException ex)
             {
+                failed.Add(service.Name);
                 results.Add(new ServiceOperationResult(service.Name, "failed", Error: ex.Message));
             }
         }
 
         return results;
     }
+
+    private static readonly TimeSpan DependencyPollInterval = TimeSpan.FromSeconds(1);
+
+    private static readonly TimeSpan DependencyWaitTimeout = TimeSpan.FromMinutes(5);
+
+    /// <summary>
+    /// Blocks until every <c>depends_on</c> condition of <paramref name="service"/> is satisfied.
+    /// <see cref="DependencyCondition.ServiceStarted"/> is a no-op (start-order is already guaranteed by
+    /// <see cref="OrderServices"/>); <see cref="DependencyCondition.ServiceHealthy"/> waits for a healthy
+    /// healthcheck; <see cref="DependencyCondition.ServiceCompletedSuccessfully"/> waits for a clean
+    /// exit. Unknown dependencies are ignored (as in ordering). Throws <see cref="ProviderException"/>
+    /// when a condition can never be met (unhealthy, non-zero exit, or no healthcheck for
+    /// <c>service_healthy</c>).
+    /// </summary>
+    private static async Task WaitForDependenciesAsync(
+        IContainerProvider provider,
+        string projectName,
+        ComposeFile file,
+        ServiceSpec service,
+        IReadOnlyDictionary<string, string> startedContainers,
+        CancellationToken cancellationToken)
+    {
+        foreach (var dependency in service.DependsOn)
+        {
+            if (dependency.Condition == DependencyCondition.ServiceStarted
+                || !file.Services.TryGetValue(dependency.Name, out var dependencyService))
+            {
+                continue;
+            }
+
+            var container = startedContainers.TryGetValue(dependency.Name, out var name)
+                ? name
+                : WslccLabels.ContainerName(projectName, dependency.Name);
+
+            var hasHealthCheck = dependencyService.HealthCheck is { Disabled: false };
+
+            await WaitForConditionAsync(provider, container, dependency, hasHealthCheck, cancellationToken)
+                .ConfigureAwait(false);
+        }
+    }
+
+    private static async Task WaitForConditionAsync(
+        IContainerProvider provider,
+        string container,
+        ServiceDependency dependency,
+        bool dependencyHasHealthCheck,
+        CancellationToken cancellationToken)
+    {
+        var deadline = DateTimeOffset.UtcNow + DependencyWaitTimeout;
+
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var state = await provider.GetContainerStateAsync(container, cancellationToken).ConfigureAwait(false);
+
+            if (IsConditionSatisfied(dependency, state, dependencyHasHealthCheck))
+            {
+                return;
+            }
+
+            if (DateTimeOffset.UtcNow >= deadline)
+            {
+                throw new ProviderException(
+                    $"timed out waiting for dependency '{dependency.Name}' to become '{Describe(dependency.Condition)}'");
+            }
+
+            await Task.Delay(DependencyPollInterval, cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// Returns whether a dependency's condition is met given its current <paramref name="state"/>. A
+    /// <c>false</c> result means "not yet, keep polling"; a condition that can never be met throws.
+    /// </summary>
+    private static bool IsConditionSatisfied(ServiceDependency dependency, ContainerRuntimeState? state, bool dependencyHasHealthCheck)
+    {
+        switch (dependency.Condition)
+        {
+            case DependencyCondition.ServiceHealthy:
+                return state?.Health switch
+                {
+                    HealthStatus.Healthy => true,
+                    HealthStatus.Unhealthy => throw new ProviderException($"dependency '{dependency.Name}' is unhealthy"),
+                    HealthStatus.None when state is not null && !dependencyHasHealthCheck => throw new ProviderException(
+                        $"dependency '{dependency.Name}' has no healthcheck; cannot satisfy condition service_healthy"),
+                    _ => false,
+                };
+
+            case DependencyCondition.ServiceCompletedSuccessfully:
+                if (state is null || !state.HasExited)
+                {
+                    return false;
+                }
+
+                return state.ExitCode is 0
+                    ? true
+                    : throw new ProviderException(
+                        $"dependency '{dependency.Name}' did not complete successfully (exit code {state.ExitCode})");
+
+            default:
+                return true;
+        }
+    }
+
+    private static string Describe(DependencyCondition condition) => condition switch
+    {
+        DependencyCondition.ServiceHealthy => "healthy",
+        DependencyCondition.ServiceCompletedSuccessfully => "completed successfully",
+        _ => "started",
+    };
 
     /// <summary>
     /// Resolves the image to run for a service and makes sure it is available. A <c>build:</c> service is
@@ -626,6 +754,7 @@ public sealed class ComposeEngine : IComposeEngine
             Image = image,
             Name = WslccLabels.ContainerName(projectName, service.Name),
             Restart = service.Restart,
+            HealthCheck = BuildContainerHealthCheck(service.HealthCheck),
             Detach = true,
         };
 
@@ -648,6 +777,58 @@ public sealed class ComposeEngine : IComposeEngine
         }
 
         return spec;
+    }
+
+    /// <summary>
+    /// Translates a service's <c>healthcheck:</c> into the provider-agnostic <see cref="ContainerHealthCheck"/>.
+    /// The Compose <c>test</c> array (<c>CMD-SHELL</c>/<c>CMD</c>/string short form) is flattened into a
+    /// single shell command; <c>disable</c>/<c>NONE</c> becomes a disabled healthcheck.
+    /// </summary>
+    private static ContainerHealthCheck? BuildContainerHealthCheck(HealthCheckSpec? spec)
+    {
+        if (spec is null)
+        {
+            return null;
+        }
+
+        if (spec.Disabled)
+        {
+            return new ContainerHealthCheck { Disabled = true };
+        }
+
+        var command = ResolveHealthCommand(spec.Test);
+        if (command is null
+            && spec.Interval is null && spec.Timeout is null && spec.Retries is null && spec.StartPeriod is null)
+        {
+            return null; // nothing to apply beyond whatever the image already declares
+        }
+
+        return new ContainerHealthCheck
+        {
+            Command = command,
+            Interval = spec.Interval,
+            Timeout = spec.Timeout,
+            Retries = spec.Retries,
+            StartPeriod = spec.StartPeriod,
+        };
+    }
+
+    private static string? ResolveHealthCommand(IList<string> test)
+    {
+        if (test.Count == 0)
+        {
+            return null;
+        }
+
+        // Compose forms: ["CMD-SHELL", "<shell cmd>"], ["CMD", "<argv>", ...], or a string short form
+        // (stored as a single element). The container CLI's --health-cmd runs via a shell either way.
+        if (string.Equals(test[0], "CMD-SHELL", StringComparison.Ordinal)
+            || string.Equals(test[0], "CMD", StringComparison.Ordinal))
+        {
+            return test.Count > 1 ? string.Join(" ", test.Skip(1)) : null;
+        }
+
+        return string.Join(" ", test);
     }
 
     /// <summary>Depth-first topological ordering by <c>depends_on</c>, tolerant of cycles/missing deps.</summary>
@@ -676,7 +857,7 @@ public sealed class ComposeEngine : IComposeEngine
 
             foreach (var dependency in service.DependsOn)
             {
-                Visit(dependency);
+                Visit(dependency.Name);
             }
 
             inProgress.Remove(name);

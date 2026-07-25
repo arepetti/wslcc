@@ -23,15 +23,13 @@ Tracked, intentionally-deferred work. See [roadmap.md](roadmap.md) for the big p
   watermark delay.
 - Recreate policy: `up` always recreates existing containers by name; add change-detection so unchanged
   services are left running.
-- Honor `depends_on` conditions (`service_healthy`, `service_completed_successfully`) and healthchecks;
-  today ordering is start-order only.
 - Networks and volumes: create/attach project networks and named volumes (currently ignored).
 
 ## Compose file fidelity
 
 - Multi-file merge dedups exact-duplicate sequence entries; Compose's per-resource unique-key merge for
   a few list attributes (e.g. long-form `ports`/`volumes` by target) is not modeled.
-- Still unsupported: `configs`/`secrets`, healthchecks, and `deploy` settings.
+- Still unsupported: `configs`/`secrets` and `deploy` settings.
 - Structured `ports`/`volumes` models instead of raw strings.
 
 ## WSL provider

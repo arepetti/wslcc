@@ -117,6 +117,12 @@ public sealed class ComposeEngineTests
             return Task.CompletedTask;
         }
 
+        /// <summary>Maps a container name to the runtime state <see cref="GetContainerStateAsync"/> reports.</summary>
+        public Dictionary<string, ContainerRuntimeState> States { get; } = new(StringComparer.Ordinal);
+
+        public Task<ContainerRuntimeState?> GetContainerStateAsync(string container, CancellationToken cancellationToken = default)
+            => Task.FromResult(States.TryGetValue(container, out var state) ? state : null);
+
         public Task<IReadOnlyList<ContainerInfo>> ListContainersAsync(string? projectName, bool all, CancellationToken cancellationToken = default)
             => Task.FromResult<IReadOnlyList<ContainerInfo>>(Existing);
 
@@ -355,6 +361,144 @@ public sealed class ComposeEngineTests
         Assert.Empty(provider.BuildSpecs);
         Assert.Contains(results, r => r.Service == "web" && r.Status == "failed" && r.Error!.Contains("--no-build"));
         Assert.DoesNotContain(provider.RunOrder, s => s == "web");
+    }
+
+    private static ComposeFile DependencyFile(DependencyCondition condition, bool dependencyHasHealthCheck = false)
+    {
+        var file = new ComposeFile();
+        file.Services["web"] = new ServiceSpec
+        {
+            Name = "web",
+            Image = "nginx",
+            DependsOn = { new ServiceDependency("db", condition) },
+        };
+
+        var db = new ServiceSpec { Name = "db", Image = "postgres" };
+        if (dependencyHasHealthCheck)
+        {
+            db.HealthCheck = new HealthCheckSpec { Test = { "CMD-SHELL", "pg_isready" } };
+        }
+
+        file.Services["db"] = db;
+        return file;
+    }
+
+    [Fact]
+    public async Task Up_waits_for_a_healthy_dependency_then_starts_the_dependent()
+    {
+        var provider = new FakeProvider("docker", true);
+        provider.States["proj-db"] = new ContainerRuntimeState("running", HealthStatus.Healthy, null);
+        var engine = new ComposeEngine(new[] { provider });
+
+        var results = await engine.UpAsync(
+            "proj", DependencyFile(DependencyCondition.ServiceHealthy, dependencyHasHealthCheck: true),
+            providerName: null, pull: false, buildPolicy: BuildPolicy.Auto, baseDirectory: null);
+
+        Assert.Equal(new[] { "db", "web" }, provider.RunOrder);
+        Assert.All(results, r => Assert.Equal("started", r.Status));
+    }
+
+    [Fact]
+    public async Task Up_fails_the_dependent_when_the_dependency_is_unhealthy()
+    {
+        var provider = new FakeProvider("docker", true);
+        provider.States["proj-db"] = new ContainerRuntimeState("running", HealthStatus.Unhealthy, null);
+        var engine = new ComposeEngine(new[] { provider });
+
+        var results = await engine.UpAsync(
+            "proj", DependencyFile(DependencyCondition.ServiceHealthy, dependencyHasHealthCheck: true),
+            providerName: null, pull: false, buildPolicy: BuildPolicy.Auto, baseDirectory: null);
+
+        Assert.Contains(results, r => r.Service == "db" && r.Status == "started");
+        Assert.Contains(results, r => r.Service == "web" && r.Status == "failed" && r.Error!.Contains("unhealthy"));
+        Assert.DoesNotContain(provider.RunOrder, s => s == "web");
+    }
+
+    [Fact]
+    public async Task Up_fails_when_service_healthy_dependency_has_no_healthcheck()
+    {
+        var provider = new FakeProvider("docker", true);
+        provider.States["proj-db"] = new ContainerRuntimeState("running", HealthStatus.None, null);
+        var engine = new ComposeEngine(new[] { provider });
+
+        var results = await engine.UpAsync(
+            "proj", DependencyFile(DependencyCondition.ServiceHealthy, dependencyHasHealthCheck: false),
+            providerName: null, pull: false, buildPolicy: BuildPolicy.Auto, baseDirectory: null);
+
+        Assert.Contains(results, r => r.Service == "web" && r.Status == "failed" && r.Error!.Contains("no healthcheck"));
+    }
+
+    [Fact]
+    public async Task Up_waits_for_a_dependency_to_complete_successfully()
+    {
+        var provider = new FakeProvider("docker", true);
+        provider.States["proj-db"] = new ContainerRuntimeState("exited", HealthStatus.None, 0);
+        var engine = new ComposeEngine(new[] { provider });
+
+        var results = await engine.UpAsync(
+            "proj", DependencyFile(DependencyCondition.ServiceCompletedSuccessfully),
+            providerName: null, pull: false, buildPolicy: BuildPolicy.Auto, baseDirectory: null);
+
+        Assert.Equal(new[] { "db", "web" }, provider.RunOrder);
+        Assert.All(results, r => Assert.Equal("started", r.Status));
+    }
+
+    [Fact]
+    public async Task Up_fails_the_dependent_when_the_dependency_exits_non_zero()
+    {
+        var provider = new FakeProvider("docker", true);
+        provider.States["proj-db"] = new ContainerRuntimeState("exited", HealthStatus.None, 1);
+        var engine = new ComposeEngine(new[] { provider });
+
+        var results = await engine.UpAsync(
+            "proj", DependencyFile(DependencyCondition.ServiceCompletedSuccessfully),
+            providerName: null, pull: false, buildPolicy: BuildPolicy.Auto, baseDirectory: null);
+
+        Assert.Contains(results, r => r.Service == "web" && r.Status == "failed" && r.Error!.Contains("exit code 1"));
+        Assert.DoesNotContain(provider.RunOrder, s => s == "web");
+    }
+
+    [Fact]
+    public async Task Up_skips_a_dependent_when_its_required_dependency_fails_to_start()
+    {
+        var provider = new FakeProvider("docker", true);
+        provider.FailImage = "postgres"; // the db dependency cannot pull its image
+        var engine = new ComposeEngine(new[] { provider });
+
+        var results = await engine.UpAsync(
+            "proj", DependencyFile(DependencyCondition.ServiceStarted),
+            providerName: null, pull: false, buildPolicy: BuildPolicy.Auto, baseDirectory: null);
+
+        Assert.Contains(results, r => r.Service == "db" && r.Status == "failed");
+        Assert.Contains(results, r => r.Service == "web" && r.Status == "failed" && r.Error!.Contains("dependency 'db'"));
+        Assert.Empty(provider.RunOrder);
+    }
+
+    [Fact]
+    public async Task Up_applies_a_service_healthcheck_to_the_run_spec()
+    {
+        var provider = new FakeProvider("docker", true);
+        var engine = new ComposeEngine(new[] { provider });
+        var file = new ComposeFile();
+        file.Services["web"] = new ServiceSpec
+        {
+            Name = "web",
+            Image = "nginx",
+            HealthCheck = new HealthCheckSpec
+            {
+                Test = { "CMD-SHELL", "curl -f http://localhost || exit 1" },
+                Interval = "30s",
+                Retries = 3,
+            },
+        };
+
+        await engine.UpAsync("proj", file, providerName: null, pull: false, buildPolicy: BuildPolicy.Auto, baseDirectory: null);
+
+        var spec = Assert.Single(provider.RunSpecs);
+        Assert.NotNull(spec.HealthCheck);
+        Assert.Equal("curl -f http://localhost || exit 1", spec.HealthCheck!.Command);
+        Assert.Equal("30s", spec.HealthCheck.Interval);
+        Assert.Equal(3, spec.HealthCheck.Retries);
     }
 
     [Fact]

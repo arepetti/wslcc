@@ -42,6 +42,54 @@ public sealed class CliCommandBuilderTests
     }
 
     [Fact]
+    public void BuildRunArguments_includes_healthcheck_flags()
+    {
+        var spec = new ContainerRunSpec { Image = "nginx", Name = "proj-web" };
+        spec.HealthCheck = new ContainerHealthCheck
+        {
+            Command = "curl -f http://localhost",
+            Interval = "30s",
+            Timeout = "5s",
+            Retries = 3,
+            StartPeriod = "10s",
+        };
+
+        var args = CliCommandBuilder.BuildRunArguments(spec);
+
+        Assert.Contains("--health-cmd \"curl -f http://localhost\"", args);
+        Assert.Contains("--health-interval 30s", args);
+        Assert.Contains("--health-timeout 5s", args);
+        Assert.Contains("--health-retries 3", args);
+        Assert.Contains("--health-start-period 10s", args);
+        Assert.EndsWith("nginx", args);
+    }
+
+    [Fact]
+    public void BuildRunArguments_disables_healthcheck()
+    {
+        var spec = new ContainerRunSpec
+        {
+            Image = "nginx",
+            Name = "proj-web",
+            HealthCheck = new ContainerHealthCheck { Disabled = true },
+        };
+
+        var args = CliCommandBuilder.BuildRunArguments(spec);
+
+        Assert.Contains("--no-healthcheck", args);
+        Assert.DoesNotContain("--health-cmd", args);
+    }
+
+    [Fact]
+    public void BuildInspectStateArguments_targets_container_with_the_state_format()
+    {
+        var args = CliCommandBuilder.BuildInspectStateArguments("proj-web");
+
+        Assert.StartsWith("container inspect --format", args);
+        Assert.EndsWith("proj-web", args);
+    }
+
+    [Fact]
     public void BuildPsArguments_filters_by_project_label()
     {
         var args = CliCommandBuilder.BuildPsArguments("proj", all: true);

@@ -24,8 +24,11 @@ public interface IComposeEngine
     /// Creates and starts containers for every service, in dependency order. Existing containers with
     /// the same name are recreated. A service that declares a <c>build:</c> section is built according to
     /// <paramref name="buildPolicy"/> (relative build contexts resolve against
-    /// <paramref name="baseDirectory"/>). Never throws for a single service failure; the outcome is
-    /// captured per service.
+    /// <paramref name="baseDirectory"/>). Before a service is started, its <c>depends_on</c> conditions
+    /// are honored: <c>service_healthy</c> waits for a healthy healthcheck and
+    /// <c>service_completed_successfully</c> waits for a clean exit. A service whose required dependency
+    /// fails (or is unhealthy / exits non-zero) is not started. Never throws for a single service
+    /// failure; the outcome is captured per service.
     /// </summary>
     Task<IReadOnlyList<ServiceOperationResult>> UpAsync(
         string projectName,

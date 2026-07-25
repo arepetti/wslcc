@@ -84,11 +84,74 @@ public sealed class ComposeFileParser
         service.EnvFile = ToStringList(GetValue(map, "env_file"));
         service.Ports = ToStringList(GetValue(map, "ports"));
         service.Volumes = ToStringList(GetValue(map, "volumes"));
-        service.DependsOn = ToKeyList(GetValue(map, "depends_on"));
+        service.DependsOn = ParseDependsOn(GetValue(map, "depends_on"));
+        service.HealthCheck = ParseHealthCheck(GetValue(map, "healthcheck"));
         service.Networks = ToKeyList(GetValue(map, "networks"));
         service.Labels = ToNonNullKeyValues(GetValue(map, "labels"));
 
         return service;
+    }
+
+    /// <summary>
+    /// Reads <c>depends_on</c> in either the short list form (<c>[db]</c>, condition
+    /// <c>service_started</c>) or the long map form (<c>db: { condition: service_healthy }</c>).
+    /// </summary>
+    private static IList<ServiceDependency> ParseDependsOn(object? value)
+    {
+        var result = new List<ServiceDependency>();
+
+        if (AsMap(value) is { } map)
+        {
+            foreach (var kvp in map)
+            {
+                var entry = AsMap(kvp.Value);
+                var condition = ParseCondition(entry is null ? null : GetString(entry, "condition"));
+                var required = entry is null || GetBool(entry, "required", defaultValue: true);
+                result.Add(new ServiceDependency(kvp.Key, condition, required));
+            }
+
+            return result;
+        }
+
+        foreach (var name in ToStringList(value))
+        {
+            result.Add(new ServiceDependency(name));
+        }
+
+        return result;
+    }
+
+    private static DependencyCondition ParseCondition(string? condition) => condition switch
+    {
+        "service_healthy" => DependencyCondition.ServiceHealthy,
+        "service_completed_successfully" => DependencyCondition.ServiceCompletedSuccessfully,
+        _ => DependencyCondition.ServiceStarted,
+    };
+
+    /// <summary>
+    /// Reads a service's <c>healthcheck:</c>. <c>disable: true</c> or a <c>["NONE"]</c> test is captured
+    /// as <see cref="HealthCheckSpec.Disabled"/>; the string short form is stored as a single test token.
+    /// </summary>
+    private static HealthCheckSpec? ParseHealthCheck(object? value)
+    {
+        if (AsMap(value) is not { } map)
+        {
+            return null;
+        }
+
+        var test = ToStringList(GetValue(map, "test"));
+        var disabled = GetBool(map, "disable")
+            || (test.Count > 0 && string.Equals(test[0], "NONE", StringComparison.Ordinal));
+
+        return new HealthCheckSpec
+        {
+            Disabled = disabled,
+            Test = test,
+            Interval = GetString(map, "interval"),
+            Timeout = GetString(map, "timeout"),
+            Retries = GetInt(map, "retries"),
+            StartPeriod = GetString(map, "start_period"),
+        };
     }
 
     private static BuildSpec? ParseBuild(object? value)
@@ -188,8 +251,14 @@ public sealed class ComposeFileParser
     private static string? GetString(IDictionary<string, object?> map, string key)
         => GetValue(map, key) is { } value ? Convert.ToString(value) : null;
 
-    private static bool GetBool(IDictionary<string, object?> map, string key)
-        => GetValue(map, key) is { } value && bool.TryParse(Convert.ToString(value), out var b) && b;
+    private static bool GetBool(IDictionary<string, object?> map, string key, bool defaultValue = false)
+        => GetValue(map, key) is { } value && bool.TryParse(Convert.ToString(value), out var b) ? b : defaultValue;
+
+    private static int? GetInt(IDictionary<string, object?> map, string key)
+        => GetValue(map, key) is { } value
+            && int.TryParse(Convert.ToString(value), System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var n)
+            ? n
+            : (int?)null;
 
     private static IList<string> ToStringList(object? value)
         => AsList(value)

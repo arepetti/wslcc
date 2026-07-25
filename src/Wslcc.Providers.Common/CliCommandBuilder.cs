@@ -62,6 +62,8 @@ public static class CliCommandBuilder
             args.Add(spec.Restart!);
         }
 
+        AppendHealthCheck(args, spec.HealthCheck);
+
         args.Add(spec.Image);
 
         foreach (var token in spec.Command)
@@ -132,7 +134,59 @@ public static class CliCommandBuilder
         return Join(args);
     }
 
+    private static void AppendHealthCheck(List<string> args, ContainerHealthCheck? health)
+    {
+        if (health is null)
+        {
+            return;
+        }
+
+        if (health.Disabled)
+        {
+            args.Add("--no-healthcheck");
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(health.Command))
+        {
+            args.Add("--health-cmd");
+            args.Add(health.Command!);
+        }
+
+        if (!string.IsNullOrWhiteSpace(health.Interval))
+        {
+            args.Add("--health-interval");
+            args.Add(health.Interval!);
+        }
+
+        if (!string.IsNullOrWhiteSpace(health.Timeout))
+        {
+            args.Add("--health-timeout");
+            args.Add(health.Timeout!);
+        }
+
+        if (health.Retries is { } retries)
+        {
+            args.Add("--health-retries");
+            args.Add(retries.ToString(CultureInfo.InvariantCulture));
+        }
+
+        if (!string.IsNullOrWhiteSpace(health.StartPeriod))
+        {
+            args.Add("--health-start-period");
+            args.Add(health.StartPeriod!);
+        }
+    }
+
     public static string BuildImageInspectArguments(string image) => Join(new[] { "image", "inspect", image });
+
+    /// <summary>Go-template used by <c>container inspect</c> for runtime state. Fields: status, health, exit code.</summary>
+    public static readonly string InspectStateFormat = string.Join(
+        FieldSeparator,
+        "{{.State.Status}}", "{{if .State.Health}}{{.State.Health.Status}}{{end}}", "{{.State.ExitCode}}");
+
+    public static string BuildInspectStateArguments(string container)
+        => Join(new[] { "container", "inspect", "--format", InspectStateFormat, container });
 
     public static string BuildStopArguments(string container) => Join(new[] { "stop", container });
 
