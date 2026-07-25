@@ -217,9 +217,17 @@ message LogsRequest {
   bool follow = 6;
   // Number of lines to show from the end of the logs; unset means "all".
   optional int32 tail = 7;
+  // Prefix each line with its timestamp. Also enables timestamp-ordered merging of a bounded
+  // (non-follow) dump across containers.
+  bool timestamps = 8;
+  // Only show logs since this point: a duration (e.g. "10m", "1h30m") or an RFC3339 timestamp.
+  // Empty means "no lower bound".
+  string since = 9;
 }
 
 message LogLine {
   string service = 1;
   string line = 2;
+  // RFC3339 timestamp of the line (UTC), when timestamps were requested; empty otherwise.
+  string timestamp = 3;
 }

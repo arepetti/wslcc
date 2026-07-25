@@ -140,7 +140,7 @@ public sealed class ComposeUpCommand : AsyncCommand<ComposeUpCommand.Settings>
 
         try
         {
-            await LogStreaming.RenderAsync(client, logsRequest, streamCts.Token).ConfigureAwait(false);
+            await LogStreaming.RenderAsync(client, logsRequest, showTimestamps: false, streamCts.Token).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (streamCts.IsCancellationRequested)
         {

@@ -450,6 +450,8 @@ public sealed class ComposeEngine : IComposeEngine
         IReadOnlyList<string>? services,
         bool follow,
         int? tail,
+        bool timestamps,
+        string? since,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         var provider = ResolveProvider(providerName);
@@ -470,11 +472,25 @@ public sealed class ComposeEngine : IComposeEngine
             yield break;
         }
 
+        // We need each line's timestamp to display it (--timestamps) and to order a bounded dump; a live
+        // (--follow) stream cannot be globally ordered, so timestamps are fetched there only to display.
+        var withTimestamps = timestamps || !follow;
+
+        if (!follow)
+        {
+            foreach (var line in await MergeByTimestampAsync(provider, containers, tail, withTimestamps, since, cancellationToken).ConfigureAwait(false))
+            {
+                yield return line;
+            }
+
+            yield break;
+        }
+
         // Fan in: one pump task per container writes tagged lines into a shared channel so the caller
         // sees an interleaved stream, mirroring how `docker compose logs` merges multiple containers.
         var channel = Channel.CreateUnbounded<ServiceLogLine>(new UnboundedChannelOptions { SingleReader = true, SingleWriter = false });
         var pumpTasks = containers
-            .Select(container => PumpLogsAsync(provider, container, channel.Writer, follow, tail, cancellationToken))
+            .Select(container => PumpLogsAsync(provider, container, channel.Writer, follow, tail, withTimestamps, since, cancellationToken))
             .ToArray();
 
         _ = Task.WhenAll(pumpTasks).ContinueWith(
@@ -489,21 +505,50 @@ public sealed class ComposeEngine : IComposeEngine
         }
     }
 
+    /// <summary>
+    /// Collects the full (bounded) log output of every container in order, then merges it by timestamp
+    /// so the combined dump reads chronologically instead of container-by-container. Lines without a
+    /// parseable timestamp keep their collected position (stable order) and sort after timed lines.
+    /// </summary>
+    private static async Task<IReadOnlyList<ServiceLogLine>> MergeByTimestampAsync(
+        IContainerProvider provider,
+        IReadOnlyList<ContainerInfo> containers,
+        int? tail,
+        bool timestamps,
+        string? since,
+        CancellationToken cancellationToken)
+    {
+        var collected = new List<ServiceLogLine>();
+        foreach (var container in containers)
+        {
+            var serviceName = container.Service ?? container.Name;
+            await foreach (var line in provider.GetLogsAsync(container.Name, follow: false, tail, timestamps, since, cancellationToken).ConfigureAwait(false))
+            {
+                collected.Add(new ServiceLogLine(serviceName, line.Message, line.Timestamp));
+            }
+        }
+
+        // OrderBy is stable, so equal (or absent) timestamps keep their collected order.
+        return collected.OrderBy(l => l.Timestamp ?? DateTimeOffset.MaxValue).ToList();
+    }
+
     private static async Task PumpLogsAsync(
         IContainerProvider provider,
         ContainerInfo container,
         ChannelWriter<ServiceLogLine> writer,
         bool follow,
         int? tail,
+        bool timestamps,
+        string? since,
         CancellationToken cancellationToken)
     {
         var serviceName = container.Service ?? container.Name;
 
         try
         {
-            await foreach (var line in provider.GetLogsAsync(container.Name, follow, tail, cancellationToken).ConfigureAwait(false))
+            await foreach (var line in provider.GetLogsAsync(container.Name, follow, tail, timestamps, since, cancellationToken).ConfigureAwait(false))
             {
-                await writer.WriteAsync(new ServiceLogLine(serviceName, line), cancellationToken).ConfigureAwait(false);
+                await writer.WriteAsync(new ServiceLogLine(serviceName, line.Message, line.Timestamp), cancellationToken).ConfigureAwait(false);
             }
         }
         catch (OperationCanceledException)

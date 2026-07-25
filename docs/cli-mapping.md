@@ -16,7 +16,7 @@ WSLCC-specific commands. `wslcc compose ps` is the same token count as `docker c
 | `docker compose restart` | `wslcc compose restart` | Implemented (`-f`, `-p`, `[SERVICES]`) |
 | `docker compose pull` | `wslcc compose pull` | Implemented (`-f`, `-p`, `[SERVICES]`) |
 | `docker compose build` | `wslcc compose build` | Implemented (`-f`, `-p`, `[SERVICES]`) |
-| `docker compose logs` | `wslcc compose logs` | Implemented (`-f`, `-p`, `[SERVICES]`, `--follow`, `--tail`) |
+| `docker compose logs` | `wslcc compose logs` | Implemented (`-f`, `-p`, `[SERVICES]`, `--follow`, `--tail`, `--timestamps`, `--since`) |
 | `docker compose config` | `wslcc compose config` | Implemented (`--format`, `--services`, `--volumes`, `--images`, `--profiles`, `--hash`, `--no-interpolate`, `-q`, `-o`) |
 
 ## WSLCC-specific commands
@@ -52,6 +52,8 @@ Applied to `up`, `down`, `ps`, `start`, `stop`, `restart`, `pull`, `build`, `log
 | `[SERVICES]` | (`start`, `stop`, `restart`, `pull`, `build`, `logs`) Optional service names to target. Defaults to every matching service. |
 | `--follow` | (`logs`) Keep streaming new log output; stop with Ctrl+C. No `-f` short form since `-f` is already `--file`. |
 | `--tail <n>` | (`logs`) Show only the last `n` lines per container. Defaults to all. |
+| `--timestamps` | (`logs`) Prefix each line with its timestamp (`<service> \| <timestamp> <line>`). |
+| `--since <time>` | (`logs`) Only show lines newer than a duration (e.g. `10m`, `1h30m`) or an RFC3339 timestamp. |
 | `--format <fmt>` | (`config`) Output format for the full document: `yaml` (default) or `json`. |
 | `--services` | (`config`) Print the enabled service names, one per line, instead of the full document. |
 | `--volumes` | (`config`) Print the declared volume names instead of the full document. |
@@ -94,7 +96,11 @@ Applied to `up`, `down`, `ps`, `start`, `stop`, `restart`, `pull`, `build`, `log
 
 > `logs` merges output from every matching container (like `docker compose logs`), tagging each line
 > with its service name (`<service> | <line>`). It uses a server-streaming RPC, so `--follow` keeps the
-> connection open and yields new lines as they're written; press Ctrl+C to stop.
+> connection open and yields new lines as they're written; press Ctrl+C to stop. A bounded (non-follow)
+> dump is buffered and merged in **timestamp order** across containers, so the combined output reads
+> chronologically rather than container-by-container; a live `--follow` stream is still interleaved as
+> lines arrive (a running stream cannot be globally sorted). Timestamps are read from the container
+> runtime for both ordering and `--timestamps` display, and `--since` is passed through to the runtime.
 
 > `config` runs **entirely client-side** and needs no daemon: it performs the same client resolution the
 > other verbs do (multi-file merge, `.env`, `${VAR}` interpolation, `extends`, profile filtering) and

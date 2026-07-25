@@ -116,4 +116,12 @@ public sealed class CliCommandBuilderTests
 
         Assert.Equal("logs proj-web", args);
     }
+
+    [Fact]
+    public void BuildLogsArguments_includes_timestamps_and_since()
+    {
+        var args = CliCommandBuilder.BuildLogsArguments("proj-web", follow: true, tail: null, timestamps: true, since: "10m");
+
+        Assert.Equal("logs --follow --timestamps --since 10m proj-web", args);
+    }
 }

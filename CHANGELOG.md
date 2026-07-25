@@ -11,7 +11,7 @@ All notable changes to this project are documented here. The format is based on
 - `wslccd` daemon: gRPC over a named pipe (optional HTTP), runnable as a per-user process or a Windows Service.
 - `compose` commands mirroring `docker compose`:
   - `up` (attached by default — streams logs and gracefully stops on Ctrl+C — or `-d`/`--detach`; auto-builds `build:` services when their image is missing, with `--build`/`--no-build`/`--pull`), `down`, `ps`.
-  - `start`, `stop`, `restart`, `pull`, `build`, `logs` (`--follow`, `--tail`) — all scoped to optional `[SERVICES]`.
+  - `start`, `stop`, `restart`, `pull`, `build`, `logs` (`--follow`, `--tail`, `--timestamps`, `--since`; a non-follow dump is merged in timestamp order across containers) — all scoped to optional `[SERVICES]`.
   - `config` (client-side): `--format yaml|json`, `--services`/`--volumes`/`--images`, `--profiles`, `--hash`, `--no-interpolate`, `-q`, `-o`.
   - Containers are named `<project>-<service>` and labelled `wslcc.project`/`wslcc.service`; commands run in `depends_on` order (reversed for `stop`/`down`) and reject unknown service names.
 - Client-side compose file resolution: multi-file merge (`-f` repeatable, `COMPOSE_FILE`), `.env` and `${VAR}` interpolation (`--env-file`), `extends`, `profiles` (`--profile`, `COMPOSE_PROFILES`), and `--project-directory`.

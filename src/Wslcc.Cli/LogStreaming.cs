@@ -12,15 +12,19 @@ internal static class LogStreaming
 {
     /// <summary>
     /// Streams log lines from the daemon to the console until the stream ends or
-    /// <paramref name="cancellationToken"/> is cancelled. Returns whether any line was printed.
+    /// <paramref name="cancellationToken"/> is cancelled. When <paramref name="showTimestamps"/> is set,
+    /// each line is prefixed with its timestamp. Returns whether any line was printed.
     /// </summary>
-    public static async Task<bool> RenderAsync(WslccClient client, LogsRequest request, CancellationToken cancellationToken)
+    public static async Task<bool> RenderAsync(WslccClient client, LogsRequest request, bool showTimestamps, CancellationToken cancellationToken)
     {
         var any = false;
         await foreach (var line in client.GetLogsAsync(request, cancellationToken).ConfigureAwait(false))
         {
             any = true;
-            AnsiConsole.MarkupLine($"[grey]{line.Service.EscapeMarkup()}[/] | {line.Line.EscapeMarkup()}");
+            var prefix = showTimestamps && !string.IsNullOrEmpty(line.Timestamp)
+                ? $"[grey]{line.Timestamp.EscapeMarkup()}[/] "
+                : string.Empty;
+            AnsiConsole.MarkupLine($"[grey]{line.Service.EscapeMarkup()}[/] | {prefix}{line.Line.EscapeMarkup()}");
         }
 
         return any;

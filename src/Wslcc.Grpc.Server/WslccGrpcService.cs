@@ -1,3 +1,4 @@
+using System.Globalization;
 using Grpc.Core;
 using Wslcc.Abstractions;
 using Wslcc.Abstractions.Compose;
@@ -256,11 +257,18 @@ public sealed class WslccGrpcService : global::Wslcc.Grpc.Contracts.Wslcc.WslccB
         try
         {
             var lines = _engine.GetLogsAsync(
-                project, file, NullIfEmpty(request.Provider), services, request.Follow, tail, context.CancellationToken);
+                project, file, NullIfEmpty(request.Provider), services,
+                request.Follow, tail, request.Timestamps, NullIfEmpty(request.Since), context.CancellationToken);
 
             await foreach (var line in lines.WithCancellation(context.CancellationToken).ConfigureAwait(false))
             {
-                await responseStream.WriteAsync(new LogLine { Service = line.Service, Line = line.Line }).ConfigureAwait(false);
+                var message = new LogLine { Service = line.Service, Line = line.Line };
+                if (request.Timestamps && line.Timestamp is { } ts)
+                {
+                    message.Timestamp = ts.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss.fffffffZ", CultureInfo.InvariantCulture);
+                }
+
+                await responseStream.WriteAsync(message).ConfigureAwait(false);
             }
         }
         catch (OperationCanceledException) when (context.CancellationToken.IsCancellationRequested)

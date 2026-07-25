@@ -121,14 +121,21 @@ public sealed class ComposeEngineTests
             => Task.FromResult<IReadOnlyList<ContainerInfo>>(Existing);
 
         /// <summary>Maps a container name to the canned lines it should "emit" for <see cref="GetLogsAsync"/>.</summary>
-        public Dictionary<string, string[]> Logs { get; } = new();
+        public Dictionary<string, ContainerLogLine[]> Logs { get; } = new();
 
-        public async IAsyncEnumerable<string> GetLogsAsync(
+        /// <summary>Records the flags each <see cref="GetLogsAsync"/> call was made with, per container.</summary>
+        public List<(string Container, bool Follow, int? Tail, bool Timestamps, string? Since)> LogCalls { get; } = new();
+
+        public async IAsyncEnumerable<ContainerLogLine> GetLogsAsync(
             string container,
             bool follow,
             int? tail,
+            bool timestamps,
+            string? since,
             [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
+            LogCalls.Add((container, follow, tail, timestamps, since));
+
             if (!Logs.TryGetValue(container, out var lines))
             {
                 yield break;
@@ -142,6 +149,9 @@ public sealed class ComposeEngineTests
             }
         }
     }
+
+    private static ContainerLogLine Line(string message, DateTimeOffset? timestamp = null)
+        => new(timestamp, message);
 
     [Fact]
     public async Task GetProviderInfos_returns_all_providers()
@@ -496,7 +506,7 @@ public sealed class ComposeEngineTests
         await Assert.ThrowsAsync<ProviderException>(async () =>
         {
             await foreach (var _ in engine.GetLogsAsync(
-                "proj", TwoServiceFile(), providerName: null, services: new[] { "ghost" }, follow: false, tail: null))
+                "proj", TwoServiceFile(), providerName: null, services: new[] { "ghost" }, follow: false, tail: null, timestamps: false, since: null))
             {
             }
         });
@@ -647,12 +657,12 @@ public sealed class ComposeEngineTests
     public async Task GetLogs_merges_lines_from_every_container_tagged_by_service()
     {
         var provider = ProviderWithTwoContainers();
-        provider.Logs["proj-web"] = new[] { "web line 1", "web line 2" };
-        provider.Logs["proj-redis"] = new[] { "redis line 1" };
+        provider.Logs["proj-web"] = new[] { Line("web line 1"), Line("web line 2") };
+        provider.Logs["proj-redis"] = new[] { Line("redis line 1") };
         var engine = new ComposeEngine(new[] { provider });
 
         var lines = new List<ServiceLogLine>();
-        await foreach (var line in engine.GetLogsAsync("proj", file: null, providerName: null, services: null, follow: false, tail: null))
+        await foreach (var line in engine.GetLogsAsync("proj", file: null, providerName: null, services: null, follow: false, tail: null, timestamps: false, since: null))
         {
             lines.Add(line);
         }
@@ -664,15 +674,52 @@ public sealed class ComposeEngineTests
     }
 
     [Fact]
-    public async Task GetLogs_filters_by_requested_services()
+    public async Task GetLogs_without_follow_merges_containers_in_timestamp_order()
     {
         var provider = ProviderWithTwoContainers();
-        provider.Logs["proj-web"] = new[] { "web line 1" };
-        provider.Logs["proj-redis"] = new[] { "redis line 1" };
+        var t0 = DateTimeOffset.Parse("2024-05-01T00:00:00Z");
+        // Interleave two containers so a container-by-container dump would NOT be chronological.
+        provider.Logs["proj-web"] = new[] { Line("web @0s", t0), Line("web @2s", t0.AddSeconds(2)) };
+        provider.Logs["proj-redis"] = new[] { Line("redis @1s", t0.AddSeconds(1)), Line("redis @3s", t0.AddSeconds(3)) };
         var engine = new ComposeEngine(new[] { provider });
 
         var lines = new List<ServiceLogLine>();
-        await foreach (var line in engine.GetLogsAsync("proj", file: null, providerName: null, services: new[] { "redis" }, follow: false, tail: null))
+        await foreach (var line in engine.GetLogsAsync("proj", file: null, providerName: null, services: null, follow: false, tail: null, timestamps: true, since: null))
+        {
+            lines.Add(line);
+        }
+
+        Assert.Equal(
+            new[] { "web @0s", "redis @1s", "web @2s", "redis @3s" },
+            lines.Select(l => l.Line).ToArray());
+    }
+
+    [Fact]
+    public async Task GetLogs_without_follow_requests_timestamps_even_when_not_asked_to_display_them()
+    {
+        // A bounded dump must be merged chronologically, so the engine still fetches timestamps.
+        var provider = ProviderWithTwoContainers();
+        provider.Logs["proj-web"] = new[] { Line("web line") };
+        var engine = new ComposeEngine(new[] { provider });
+
+        await foreach (var _ in engine.GetLogsAsync("proj", file: null, providerName: null, services: null, follow: false, tail: null, timestamps: false, since: "10m"))
+        {
+        }
+
+        Assert.All(provider.LogCalls, c => Assert.True(c.Timestamps));
+        Assert.All(provider.LogCalls, c => Assert.Equal("10m", c.Since));
+    }
+
+    [Fact]
+    public async Task GetLogs_filters_by_requested_services()
+    {
+        var provider = ProviderWithTwoContainers();
+        provider.Logs["proj-web"] = new[] { Line("web line 1") };
+        provider.Logs["proj-redis"] = new[] { Line("redis line 1") };
+        var engine = new ComposeEngine(new[] { provider });
+
+        var lines = new List<ServiceLogLine>();
+        await foreach (var line in engine.GetLogsAsync("proj", file: null, providerName: null, services: new[] { "redis" }, follow: false, tail: null, timestamps: false, since: null))
         {
             lines.Add(line);
         }
@@ -688,7 +735,7 @@ public sealed class ComposeEngineTests
         var engine = new ComposeEngine(new[] { provider });
 
         var lines = new List<ServiceLogLine>();
-        await foreach (var line in engine.GetLogsAsync("proj", file: null, providerName: null, services: null, follow: false, tail: null))
+        await foreach (var line in engine.GetLogsAsync("proj", file: null, providerName: null, services: null, follow: false, tail: null, timestamps: false, since: null))
         {
             lines.Add(line);
         }

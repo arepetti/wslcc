@@ -18,9 +18,9 @@ Tracked, intentionally-deferred work. See [roadmap.md](roadmap.md) for the big p
 - Stream per-service progress for the remaining unary RPCs
   (`Up`/`Down`/`Ps`/`Start`/`Stop`/`Restart`/`Pull`/`Build`) instead of returning a single batch result,
   so long operations report progress incrementally (as `logs` and attached `up` already do).
-- `logs`: add `--timestamps` and `--since`, and sort the merged multi-container output by timestamp
-  (today lines are interleaved as they arrive). `--no-color` is already handled by the global `--no-color`
-  flag / `NO_COLOR`.
+- `logs --follow`: a live stream is still interleaved as lines arrive (only a bounded, non-follow dump is
+  sorted by timestamp). Ordering a running multi-container stream would need a bounded reorder buffer /
+  watermark delay.
 - Recreate policy: `up` always recreates existing containers by name; add change-detection so unchanged
   services are left running.
 - Honor `depends_on` conditions (`service_healthy`, `service_completed_successfully`) and healthchecks;

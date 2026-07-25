@@ -143,13 +143,24 @@ public static class CliCommandBuilder
     public static string BuildRemoveArguments(string container, bool force)
         => force ? Join(new[] { "rm", "-f", container }) : Join(new[] { "rm", container });
 
-    public static string BuildLogsArguments(string container, bool follow, int? tail)
+    public static string BuildLogsArguments(string container, bool follow, int? tail, bool timestamps = false, string? since = null)
     {
         var args = new List<string> { "logs" };
 
         if (follow)
         {
             args.Add("--follow");
+        }
+
+        if (timestamps)
+        {
+            args.Add("--timestamps");
+        }
+
+        if (!string.IsNullOrWhiteSpace(since))
+        {
+            args.Add("--since");
+            args.Add(since!);
         }
 
         if (tail is { } n)

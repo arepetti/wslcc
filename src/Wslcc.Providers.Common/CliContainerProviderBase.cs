@@ -93,12 +93,20 @@ public abstract class CliContainerProviderBase : IContainerProvider
         return ParsePs(result!.StandardOutput);
     }
 
-    public IAsyncEnumerable<string> GetLogsAsync(
+    public async IAsyncEnumerable<ContainerLogLine> GetLogsAsync(
         string container,
         bool follow,
         int? tail,
-        CancellationToken cancellationToken = default)
-        => ProcessRunner.StreamLinesAsync(Executable, CliCommandBuilder.BuildLogsArguments(container, follow, tail), cancellationToken);
+        bool timestamps,
+        string? since,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        var arguments = CliCommandBuilder.BuildLogsArguments(container, follow, tail, timestamps, since);
+        await foreach (var raw in ProcessRunner.StreamLinesAsync(Executable, arguments, cancellationToken).ConfigureAwait(false))
+        {
+            yield return timestamps ? CliLogParser.ParseTimestamped(raw) : new ContainerLogLine(null, raw);
+        }
+    }
 
     private Task<ProcessResult?> TryRunAsync(string arguments, CancellationToken cancellationToken)
         => ProcessRunner.TryRunAsync(Executable, arguments, cancellationToken);

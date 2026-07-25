@@ -129,7 +129,10 @@ public interface IComposeEngine
     /// is included; a requested service name that the project does not define is rejected. Containers
     /// are attached in <c>depends_on</c> order (dependencies first) when <paramref name="file"/> is
     /// provided. When <paramref name="follow"/> is <c>true</c>, the stream stays open until
-    /// <paramref name="cancellationToken"/> is cancelled.
+    /// <paramref name="cancellationToken"/> is cancelled and lines are interleaved as they arrive; when
+    /// <c>false</c>, the bounded output is buffered and merged in <paramref name="timestamps"/> order.
+    /// <paramref name="timestamps"/> also carries each line's time through to the caller; and
+    /// <paramref name="since"/> filters to lines newer than a duration or RFC3339 timestamp.
     /// </summary>
     IAsyncEnumerable<ServiceLogLine> GetLogsAsync(
         string projectName,
@@ -138,5 +141,7 @@ public interface IComposeEngine
         IReadOnlyList<string>? services,
         bool follow,
         int? tail,
+        bool timestamps,
+        string? since,
         CancellationToken cancellationToken = default);
 }

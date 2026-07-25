@@ -23,6 +23,14 @@ public sealed class ComposeLogsCommand : AsyncCommand<ComposeLogsCommand.Setting
         [CommandOption("--tail <N>")]
         [Description("Number of lines to show from the end of the logs. Defaults to all.")]
         public int? Tail { get; set; }
+
+        [CommandOption("--timestamps")]
+        [Description("Prefix each line with its timestamp.")]
+        public bool Timestamps { get; set; }
+
+        [CommandOption("--since <TIME>")]
+        [Description("Only show logs since a duration (e.g. '10m', '1h30m') or an RFC3339 timestamp.")]
+        public string? Since { get; set; }
     }
 
     protected override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
@@ -46,6 +54,8 @@ public sealed class ComposeLogsCommand : AsyncCommand<ComposeLogsCommand.Setting
             ComposeYaml = inputs?.Yaml ?? string.Empty,
             Provider = settings.Provider ?? string.Empty,
             Follow = settings.Follow,
+            Timestamps = settings.Timestamps,
+            Since = settings.Since ?? string.Empty,
         };
         request.Services.AddRange(settings.Services);
         if (settings.Tail is { } tail)
@@ -65,7 +75,7 @@ public sealed class ComposeLogsCommand : AsyncCommand<ComposeLogsCommand.Setting
         try
         {
             using var client = new WslccClient(settings.Host);
-            var any = await LogStreaming.RenderAsync(client, request, cts.Token).ConfigureAwait(false);
+            var any = await LogStreaming.RenderAsync(client, request, settings.Timestamps, cts.Token).ConfigureAwait(false);
 
             if (!any)
             {

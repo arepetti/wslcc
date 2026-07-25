@@ -57,11 +57,16 @@ public interface IContainerProvider
     /// Streams a container's log lines. When <paramref name="follow"/> is <c>true</c>, the stream stays
     /// open and yields new lines as they are written until <paramref name="cancellationToken"/> is
     /// cancelled or the container stops. When <paramref name="tail"/> is set, only the last N lines are
-    /// included in the initial output.
+    /// included in the initial output. When <paramref name="timestamps"/> is <c>true</c>, each returned
+    /// line carries its parsed <see cref="ContainerLogLine.Timestamp"/>. <paramref name="since"/> filters
+    /// to lines newer than a duration (e.g. <c>10m</c>) or an RFC3339 timestamp; <c>null</c>/empty means
+    /// "no lower bound".
     /// </summary>
-    IAsyncEnumerable<string> GetLogsAsync(
+    IAsyncEnumerable<ContainerLogLine> GetLogsAsync(
         string container,
         bool follow,
         int? tail,
+        bool timestamps,
+        string? since,
         CancellationToken cancellationToken = default);
 }
