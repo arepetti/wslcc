@@ -66,8 +66,8 @@ public static class ComposeLoader
             ?? options.WorkingDirectory;
         var envDirectory = options.ProjectDirectory ?? options.WorkingDirectory;
 
-        var pool = BuildVariablePool(options, envDirectory);
         var warnings = new List<string>();
+        var pool = BuildVariablePool(options, envDirectory, warnings);
         var interpolator = new VariableInterpolator(
             name => pool.TryGetValue(name, out var value) ? value : null, warnings);
 
@@ -142,10 +142,17 @@ public static class ComposeLoader
         return profiles.ToList();
     }
 
-    private static Dictionary<string, string> BuildVariablePool(ComposeLoadOptions options, string envDirectory)
+    private static Dictionary<string, string> BuildVariablePool(ComposeLoadOptions options, string envDirectory, List<string> warnings)
     {
-        var pool = new Dictionary<string, string>(StringComparer.Ordinal);
+        var processEnvironment = options.ProcessEnvironment is { } provided
+            ? new Dictionary<string, string>(provided, StringComparer.Ordinal)
+            : CaptureProcessEnvironment();
 
+        // .env values are interpolated against variables set earlier in the file, then the process
+        // environment (which also overrides .env for the final pool, matching docker-compose).
+        string? EnvLookup(string name) => processEnvironment.TryGetValue(name, out var value) ? value : null;
+
+        IReadOnlyDictionary<string, string> envValues;
         if (options.EnvFilePath is { } explicitEnv)
         {
             var full = Path.GetFullPath(explicitEnv);
@@ -154,15 +161,16 @@ public static class ComposeLoader
                 throw new ComposeLoadException($"--env-file not found: {full}");
             }
 
-            Overlay(pool, EnvFile.Load(full));
+            envValues = EnvFile.Load(full, EnvLookup, warnings);
         }
         else
         {
-            Overlay(pool, EnvFile.Load(Path.Combine(envDirectory, ".env")));
+            envValues = EnvFile.Load(Path.Combine(envDirectory, ".env"), EnvLookup, warnings);
         }
 
-        // Process environment overrides .env, matching docker-compose.
-        Overlay(pool, options.ProcessEnvironment ?? CaptureProcessEnvironment());
+        var pool = new Dictionary<string, string>(StringComparer.Ordinal);
+        Overlay(pool, envValues);
+        Overlay(pool, processEnvironment);
         return pool;
     }
 

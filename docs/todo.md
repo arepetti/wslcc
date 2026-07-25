@@ -29,7 +29,6 @@ Tracked, intentionally-deferred work. See [roadmap.md](roadmap.md) for the big p
 
 ## Compose file fidelity
 
-- `.env` parsing is a small subset (no multiline values or in-value expansion).
 - Multi-file merge dedups exact-duplicate sequence entries; Compose's per-resource unique-key merge for
   a few list attributes (e.g. long-form `ports`/`volumes` by target) is not modeled.
 - Still unsupported: `configs`/`secrets`, healthchecks, and `deploy` settings.

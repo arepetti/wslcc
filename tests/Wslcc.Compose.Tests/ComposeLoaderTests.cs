@@ -93,6 +93,25 @@ public sealed class ComposeLoaderTests : IDisposable
     }
 
     [Fact]
+    public void Env_file_values_may_reference_earlier_env_file_variables()
+    {
+        var file = Write("compose.yaml", """
+            services:
+              web:
+                image: ${REPO}/web:${TAG}
+            """);
+        Write(".env", """
+            REGISTRY=registry.example.com
+            REPO=${REGISTRY}/team
+            TAG=1.27
+            """);
+
+        var result = Load(new[] { file });
+
+        Assert.Equal("registry.example.com/team/web:1.27", Service(result.ResolvedYaml, "web")["image"]);
+    }
+
+    [Fact]
     public void Merges_multiple_files_with_later_overriding()
     {
         var basePath = Write("compose.yaml", """

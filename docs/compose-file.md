@@ -37,7 +37,11 @@ The client resolver supports:
   `${VAR:?error}` / `${VAR?error}`, `${VAR:+alternate}` / `${VAR+alternate}`, and `$$` for a literal
   `$`. Values come from the process environment overlaid on a `.env` file (process environment wins).
   `.env` is read from the project directory unless `--env-file <path>` is given. An unset variable with
-  no default resolves to an empty string and prints a warning.
+  no default resolves to an empty string and prints a warning. The `.env` reader itself understands an
+  optional leading `export`, whole-line and inline (` #`) comments, single-quoted values (literal),
+  double-quoted values (C-style escapes `\n` `\t` `\r` `\f` `\b` `\v` `\"` `\\`), quoted values that
+  span multiple lines, and in-value `${VAR}` expansion (referencing variables set earlier in the file,
+  then the process environment).
 - **`extends`** — `extends: base`, `extends: { service: base }`, or
   `extends: { file: other.yaml, service: base }`. The base is resolved first (chains work) and the
   child is merged over it using the same per-attribute rules; `file` paths are relative to the file
