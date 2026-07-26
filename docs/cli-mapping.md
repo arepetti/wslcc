@@ -8,7 +8,7 @@ WSLCC-specific commands. `wslcc compose ps` is the same token count as `docker c
 | Docker | WSLCC | Status |
 | --- | --- | --- |
 | `docker compose version` | `wslcc compose version` | Implemented (`--short`, `--format json\|pretty`) |
-| `docker compose up` | `wslcc compose up` | Implemented (attached by default, `-d`/`--detach` to background; `-f`, `-p`, `--pull`, `--build`, `--no-build`; auto-builds `build:` services when their image is missing; honors `depends_on` conditions and applies service healthchecks) |
+| `docker compose up` | `wslcc compose up` | Implemented (attached by default, `-d`/`--detach` to background; `-f`, `-p`, `--pull`, `--build`, `--no-build`; auto-builds `build:` services when their image is missing; honors `depends_on` conditions and applies service healthchecks; leaves unchanged, still-running services in place) |
 | `docker compose down` | `wslcc compose down` | Implemented (`-f`, `-p`) |
 | `docker compose ps` | `wslcc compose ps` | Implemented (`-f`, `-p`, `-a`) |
 | `docker compose start` | `wslcc compose start` | Implemented (`-f`, `-p`, `[SERVICES]`) |
@@ -102,6 +102,12 @@ Applied to `up`, `down`, `ps`, `start`, `stop`, `restart`, `pull`, `build`, `log
 > or `image:` tag `build` would use) is not present locally, mirroring `docker compose up`; if the image
 > already exists it is reused. Pass `--build` to force a rebuild every time, or `--no-build` to skip
 > building entirely (a `build:` service whose image is missing then fails instead of being built).
+
+> `up` recreates containers only when needed. Each container is stamped with a `wslcc.config-hash` label
+> (the same per-service hash `config --hash` reports); on a later `up`, a service whose container is still
+> **running** with a matching hash is left in place (reported as `running`) instead of being recreated.
+> Anything else — a changed hash, a stopped/absent container, or `--pull`/`--build` (which fetch fresh
+> images) — recreates the container.
 
 > `logs` merges output from every matching container (like `docker compose logs`), tagging each line
 > with its service name (`<service> | <line>`). It uses a server-streaming RPC, so `--follow` keeps the

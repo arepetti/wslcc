@@ -15,6 +15,7 @@ All notable changes to this project are documented here. The format is based on
   - `config` (client-side): `--format yaml|json`, `--services`/`--volumes`/`--images`, `--profiles`, `--hash`, `--no-interpolate`, `-q`, `-o`.
   - Containers are named `<project>-<service>` and labelled `wslcc.project`/`wslcc.service`; commands run in `depends_on` order (reversed for `stop`/`down`) and reject unknown service names.
   - `up` honors `depends_on` conditions (`service_healthy`, `service_completed_successfully`) and applies service `healthcheck:` settings, waiting for dependencies (and aborting dependents that fail).
+  - `up` change-detection: an unchanged, still-running service (same config hash) is left in place instead of recreated; `--pull`/`--build` force recreation.
 - Client-side compose file resolution: multi-file merge (`-f` repeatable, `COMPOSE_FILE`), `.env` (quotes, escapes, inline comments, multi-line and self-referencing values) and `${VAR}` interpolation (`--env-file`), `extends`, `profiles` (`--profile`, `COMPOSE_PROFILES`), and `--project-directory`.
 - Daemon commands: `daemon start`/`stop`/`status`, `daemon install`/`uninstall` (Windows Service), and top-level `version`.
 - Options: `--no-color` (and `NO_COLOR`) on every command; `compose` commands use `--wslcc-host`/`--wslcc-provider`, while `version`/`daemon` commands use `-H`/`--host` (plus `--provider` on `daemon start`/`install` to set the daemon's default).

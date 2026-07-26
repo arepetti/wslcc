@@ -21,14 +21,20 @@ public interface IComposeEngine
     Task<ProviderInfo> GetProviderInfoAsync(string? providerName, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Creates and starts containers for every service, in dependency order. Existing containers with
-    /// the same name are recreated. A service that declares a <c>build:</c> section is built according to
-    /// <paramref name="buildPolicy"/> (relative build contexts resolve against
-    /// <paramref name="baseDirectory"/>). Before a service is started, its <c>depends_on</c> conditions
-    /// are honored: <c>service_healthy</c> waits for a healthy healthcheck and
-    /// <c>service_completed_successfully</c> waits for a clean exit. A service whose required dependency
-    /// fails (or is unhealthy / exits non-zero) is not started. Never throws for a single service
-    /// failure; the outcome is captured per service.
+    /// Creates and starts containers for every service, in dependency order. A service that declares a
+    /// <c>build:</c> section is built according to <paramref name="buildPolicy"/> (relative build contexts
+    /// resolve against <paramref name="baseDirectory"/>). Before a service is started, its
+    /// <c>depends_on</c> conditions are honored: <c>service_healthy</c> waits for a healthy healthcheck
+    /// and <c>service_completed_successfully</c> waits for a clean exit. A service whose required
+    /// dependency fails (or is unhealthy / exits non-zero) is not started.
+    /// <para>
+    /// Change detection: when <paramref name="serviceConfigHashes"/> maps a service to its resolved
+    /// config hash, an existing container that is still running and carries the same hash is left in
+    /// place (reported as <c>running</c>) instead of being recreated. Otherwise the existing container is
+    /// replaced. Passing <c>--pull</c> or <c>--build</c> (<see cref="BuildPolicy.Always"/>) forces
+    /// recreation regardless of the hash.
+    /// </para>
+    /// Never throws for a single service failure; the outcome is captured per service.
     /// </summary>
     Task<IReadOnlyList<ServiceOperationResult>> UpAsync(
         string projectName,
@@ -37,6 +43,7 @@ public interface IComposeEngine
         bool pull,
         BuildPolicy buildPolicy,
         string? baseDirectory,
+        IReadOnlyDictionary<string, string>? serviceConfigHashes = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>

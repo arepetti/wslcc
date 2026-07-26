@@ -501,6 +501,112 @@ public sealed class ComposeEngineTests
         Assert.Equal(3, spec.HealthCheck.Retries);
     }
 
+    private static ComposeFile SingleService(string name = "web", string image = "nginx")
+    {
+        var file = new ComposeFile();
+        file.Services[name] = new ServiceSpec { Name = name, Image = image };
+        return file;
+    }
+
+    [Fact]
+    public async Task Up_leaves_an_unchanged_running_service_in_place()
+    {
+        var provider = new FakeProvider("docker", true);
+        provider.Existing.Add(new ContainerInfo("id-web", "proj-web", "nginx", "running", Service: "web", ConfigHash: "hash-web"));
+        var engine = new ComposeEngine(new[] { provider });
+        var hashes = new Dictionary<string, string> { ["web"] = "hash-web" };
+
+        var results = await engine.UpAsync(
+            "proj", SingleService(), providerName: null, pull: false, buildPolicy: BuildPolicy.Auto,
+            baseDirectory: null, serviceConfigHashes: hashes);
+
+        var result = Assert.Single(results);
+        Assert.Equal("running", result.Status);
+        Assert.Empty(provider.RunOrder); // not recreated
+        Assert.Empty(provider.Removed);
+    }
+
+    [Fact]
+    public async Task Up_recreates_a_service_whose_config_hash_changed()
+    {
+        var provider = new FakeProvider("docker", true);
+        provider.Existing.Add(new ContainerInfo("id-web", "proj-web", "nginx", "running", Service: "web", ConfigHash: "old"));
+        var engine = new ComposeEngine(new[] { provider });
+        var hashes = new Dictionary<string, string> { ["web"] = "new" };
+
+        var results = await engine.UpAsync(
+            "proj", SingleService(), providerName: null, pull: false, buildPolicy: BuildPolicy.Auto,
+            baseDirectory: null, serviceConfigHashes: hashes);
+
+        Assert.Equal(new[] { "web" }, provider.RunOrder);
+        Assert.Contains("proj-web", provider.Removed);
+        Assert.All(results, r => Assert.Equal("started", r.Status));
+
+        var spec = Assert.Single(provider.RunSpecs);
+        Assert.Equal("new", spec.Labels[WslccLabels.ConfigHash]);
+    }
+
+    [Fact]
+    public async Task Up_recreates_an_unchanged_service_that_is_not_running()
+    {
+        var provider = new FakeProvider("docker", true);
+        provider.Existing.Add(new ContainerInfo("id-web", "proj-web", "nginx", "exited", Service: "web", ConfigHash: "same"));
+        var engine = new ComposeEngine(new[] { provider });
+        var hashes = new Dictionary<string, string> { ["web"] = "same" };
+
+        await engine.UpAsync(
+            "proj", SingleService(), providerName: null, pull: false, buildPolicy: BuildPolicy.Auto,
+            baseDirectory: null, serviceConfigHashes: hashes);
+
+        Assert.Equal(new[] { "web" }, provider.RunOrder); // stopped container is recreated despite matching hash
+    }
+
+    [Fact]
+    public async Task Up_with_pull_recreates_even_an_unchanged_running_service()
+    {
+        var provider = new FakeProvider("docker", true);
+        provider.Existing.Add(new ContainerInfo("id-web", "proj-web", "nginx", "running", Service: "web", ConfigHash: "same"));
+        var engine = new ComposeEngine(new[] { provider });
+        var hashes = new Dictionary<string, string> { ["web"] = "same" };
+
+        await engine.UpAsync(
+            "proj", SingleService(), providerName: null, pull: true, buildPolicy: BuildPolicy.Auto,
+            baseDirectory: null, serviceConfigHashes: hashes);
+
+        Assert.Equal(new[] { "web" }, provider.RunOrder);
+    }
+
+    [Fact]
+    public async Task Up_with_build_recreates_even_an_unchanged_running_service()
+    {
+        var provider = new FakeProvider("docker", true);
+        provider.ExistingImages.Add("proj-web");
+        provider.Existing.Add(new ContainerInfo("id-web", "proj-web", "proj-web", "running", Service: "web", ConfigHash: "same"));
+        var engine = new ComposeEngine(new[] { provider });
+        var hashes = new Dictionary<string, string> { ["web"] = "same" };
+
+        await engine.UpAsync(
+            "proj", FileWithBuildableService(), providerName: null, pull: false, buildPolicy: BuildPolicy.Always,
+            baseDirectory: null, serviceConfigHashes: hashes);
+
+        Assert.Contains("web", provider.RunOrder);
+    }
+
+    [Fact]
+    public async Task Up_stamps_new_containers_with_their_config_hash()
+    {
+        var provider = new FakeProvider("docker", true);
+        var engine = new ComposeEngine(new[] { provider });
+        var hashes = new Dictionary<string, string> { ["web"] = "abc123" };
+
+        await engine.UpAsync(
+            "proj", SingleService(), providerName: null, pull: false, buildPolicy: BuildPolicy.Auto,
+            baseDirectory: null, serviceConfigHashes: hashes);
+
+        var spec = Assert.Single(provider.RunSpecs);
+        Assert.Equal("abc123", spec.Labels[WslccLabels.ConfigHash]);
+    }
+
     [Fact]
     public async Task Down_stops_and_removes_project_containers()
     {

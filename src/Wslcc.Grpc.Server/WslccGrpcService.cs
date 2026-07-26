@@ -88,9 +88,14 @@ public sealed class WslccGrpcService : global::Wslcc.Grpc.Contracts.Wslcc.WslccB
             _ => global::Wslcc.Abstractions.BuildPolicy.Auto,
         };
 
+        // The per-service config hash (identical to `config --hash`) lets the engine leave unchanged,
+        // still-running containers in place instead of recreating them.
+        var configHashes = ComposeHash.ComputeServiceHashes(request.ComposeYaml);
+
         var results = await Guard(() =>
             _engine.UpAsync(
-                project, file, NullIfEmpty(request.Provider), request.Pull, buildPolicy, NullIfEmpty(request.BaseDirectory), context.CancellationToken))
+                project, file, NullIfEmpty(request.Provider), request.Pull, buildPolicy, NullIfEmpty(request.BaseDirectory),
+                configHashes, context.CancellationToken))
             .ConfigureAwait(false);
 
         var response = new UpResponse { ProjectName = project };

@@ -38,12 +38,19 @@ public sealed class ComposeEngine : IComposeEngine
         bool pull,
         BuildPolicy buildPolicy,
         string? baseDirectory,
+        IReadOnlyDictionary<string, string>? serviceConfigHashes = null,
         CancellationToken cancellationToken = default)
     {
         var provider = ResolveProvider(providerName);
         var results = new List<ServiceOperationResult>();
         var startedContainers = new Dictionary<string, string>(StringComparer.Ordinal);
         var failed = new HashSet<string>(StringComparer.Ordinal);
+
+        var existingByService = await ListByServiceAsync(provider, projectName, cancellationToken).ConfigureAwait(false);
+
+        // --pull / --build ask for fresh images, so containers are always recreated to pick them up;
+        // otherwise recreation is driven by the per-service config hash below.
+        var forceRecreate = pull || buildPolicy == BuildPolicy.Always;
 
         foreach (var service in OrderServices(file))
         {
@@ -60,6 +67,21 @@ public sealed class ComposeEngine : IComposeEngine
                 continue;
             }
 
+            var existing = existingByService.GetValueOrDefault(service.Name);
+            var configHash = serviceConfigHashes?.GetValueOrDefault(service.Name);
+
+            // Leave an unchanged, still-running container in place instead of recreating it.
+            if (!forceRecreate
+                && existing is not null
+                && IsRunning(existing)
+                && configHash is { Length: > 0 }
+                && string.Equals(existing.ConfigHash, configHash, StringComparison.Ordinal))
+            {
+                startedContainers[service.Name] = existing.Name;
+                results.Add(new ServiceOperationResult(service.Name, "running", existing.Id));
+                continue;
+            }
+
             try
             {
                 await WaitForDependenciesAsync(provider, projectName, file, service, startedContainers, cancellationToken)
@@ -69,6 +91,11 @@ public sealed class ComposeEngine : IComposeEngine
                     .ConfigureAwait(false);
 
                 var spec = ToRunSpec(projectName, service, image);
+                if (configHash is { Length: > 0 })
+                {
+                    spec.Labels[WslccLabels.ConfigHash] = configHash;
+                }
+
                 await TryRemoveExistingAsync(provider, spec.Name, cancellationToken).ConfigureAwait(false);
 
                 var id = await provider.RunContainerAsync(spec, cancellationToken).ConfigureAwait(false);
@@ -83,6 +110,28 @@ public sealed class ComposeEngine : IComposeEngine
         }
 
         return results;
+    }
+
+    private static bool IsRunning(ContainerInfo container)
+        => string.Equals(container.State, "running", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Lists the project's existing containers indexed by service name (first wins on duplicates).</summary>
+    private static async Task<Dictionary<string, ContainerInfo>> ListByServiceAsync(
+        IContainerProvider provider,
+        string projectName,
+        CancellationToken cancellationToken)
+    {
+        var containers = await provider.ListContainersAsync(projectName, all: true, cancellationToken).ConfigureAwait(false);
+        var byService = new Dictionary<string, ContainerInfo>(StringComparer.Ordinal);
+        foreach (var container in containers)
+        {
+            if (container.Service is { } service && !byService.ContainsKey(service))
+            {
+                byService[service] = container;
+            }
+        }
+
+        return byService;
     }
 
     private static readonly TimeSpan DependencyPollInterval = TimeSpan.FromSeconds(1);

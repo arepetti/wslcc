@@ -179,7 +179,8 @@ public abstract class CliContainerProviderBase : IContainerProvider
                 Status: Field(4),
                 Service: ExtractLabel(labels, WslccLabels.Service),
                 Ports: Field(5),
-                Project: ExtractLabel(labels, WslccLabels.Project)));
+                Project: ExtractLabel(labels, WslccLabels.Project),
+                ConfigHash: ExtractLabel(labels, WslccLabels.ConfigHash)));
         }
 
         return containers;

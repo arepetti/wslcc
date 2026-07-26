@@ -39,6 +39,10 @@ A service whose required dependency fails to start, reports unhealthy, or exits 
 (and is reported as failed, along with its own dependents). `healthcheck: { disable: true }` (or
 `test: ["NONE"]`) turns the healthcheck off.
 
+`up` also skips recreating containers that haven't changed: each container carries a config-hash label
+(the same hash `config --hash` reports), and a service whose container is still running with a matching
+hash is left in place. A changed hash, a stopped container, or `--pull`/`--build` recreates it.
+
 ## Resolution features
 
 The client resolver supports:

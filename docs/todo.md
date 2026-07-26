@@ -21,8 +21,6 @@ Tracked, intentionally-deferred work. See [roadmap.md](roadmap.md) for the big p
 - `logs --follow`: a live stream is still interleaved as lines arrive (only a bounded, non-follow dump is
   sorted by timestamp). Ordering a running multi-container stream would need a bounded reorder buffer /
   watermark delay.
-- Recreate policy: `up` always recreates existing containers by name; add change-detection so unchanged
-  services are left running.
 - Networks and volumes: create/attach project networks and named volumes (currently ignored).
 
 ## Compose file fidelity

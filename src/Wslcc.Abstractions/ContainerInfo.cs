@@ -11,4 +11,5 @@ public sealed record ContainerInfo(
     string? Status = null,
     string? Service = null,
     string? Ports = null,
-    string? Project = null);
+    string? Project = null,
+    string? ConfigHash = null);
