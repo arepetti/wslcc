@@ -48,12 +48,15 @@ public interface IComposeEngine
 
     /// <summary>
     /// Stops and removes all containers belonging to the project, in reverse <c>depends_on</c> order
-    /// (dependents first) when <paramref name="file"/> is provided.
+    /// (dependents first) when <paramref name="file"/> is provided. Project networks created by wslcc are
+    /// then removed; named project volumes are removed only when <paramref name="removeVolumes"/> is set
+    /// (matching <c>docker compose down --volumes</c>, which preserves data by default).
     /// </summary>
     Task<IReadOnlyList<ServiceOperationResult>> DownAsync(
         string projectName,
         ComposeFile? file,
         string? providerName,
+        bool removeVolumes = false,
         CancellationToken cancellationToken = default);
 
     /// <summary>

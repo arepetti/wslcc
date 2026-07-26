@@ -115,7 +115,7 @@ public sealed class WslccGrpcService : global::Wslcc.Grpc.Contracts.Wslcc.WslccB
         }
 
         var results = await Guard(() =>
-            _engine.DownAsync(project, file, NullIfEmpty(request.Provider), context.CancellationToken))
+            _engine.DownAsync(project, file, NullIfEmpty(request.Provider), request.Volumes, context.CancellationToken))
             .ConfigureAwait(false);
 
         var response = new DownResponse { ProjectName = project };

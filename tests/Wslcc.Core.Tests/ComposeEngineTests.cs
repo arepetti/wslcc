@@ -82,6 +82,58 @@ public sealed class ComposeEngineTests
             return Task.FromResult("id-" + spec.Name);
         }
 
+        public List<NetworkCreateSpec> EnsuredNetworks { get; } = new();
+
+        public List<VolumeCreateSpec> EnsuredVolumes { get; } = new();
+
+        public List<(string Network, string Container, string? Alias)> Connected { get; } = new();
+
+        public List<string> RemovedNetworks { get; } = new();
+
+        public List<string> RemovedVolumes { get; } = new();
+
+        /// <summary>Network names <see cref="ListNetworkNamesAsync"/> reports (project teardown discovery).</summary>
+        public List<string> NetworkNames { get; } = new();
+
+        /// <summary>Volume names <see cref="ListVolumeNamesAsync"/> reports (project teardown discovery).</summary>
+        public List<string> VolumeNames { get; } = new();
+
+        public Task EnsureNetworkAsync(NetworkCreateSpec spec, CancellationToken cancellationToken = default)
+        {
+            EnsuredNetworks.Add(spec);
+            return Task.CompletedTask;
+        }
+
+        public Task EnsureVolumeAsync(VolumeCreateSpec spec, CancellationToken cancellationToken = default)
+        {
+            EnsuredVolumes.Add(spec);
+            return Task.CompletedTask;
+        }
+
+        public Task ConnectNetworkAsync(string network, string container, string? alias, CancellationToken cancellationToken = default)
+        {
+            Connected.Add((network, container, alias));
+            return Task.CompletedTask;
+        }
+
+        public Task<IReadOnlyList<string>> ListNetworkNamesAsync(string projectName, CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlyList<string>>(NetworkNames);
+
+        public Task<IReadOnlyList<string>> ListVolumeNamesAsync(string projectName, CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlyList<string>>(VolumeNames);
+
+        public Task RemoveNetworkAsync(string network, CancellationToken cancellationToken = default)
+        {
+            RemovedNetworks.Add(network);
+            return Task.CompletedTask;
+        }
+
+        public Task RemoveVolumeAsync(string volume, CancellationToken cancellationToken = default)
+        {
+            RemovedVolumes.Add(volume);
+            return Task.CompletedTask;
+        }
+
         public Task StopContainerAsync(string container, CancellationToken cancellationToken = default)
         {
             ThrowIfShouldFail(container);
@@ -635,6 +687,139 @@ public sealed class ComposeEngineTests
         // web depends_on redis, so the dependent (web) is stopped/removed before its dependency (redis).
         Assert.Equal(new[] { "proj-web", "proj-redis" }, provider.Stopped);
         Assert.Equal(new[] { "proj-web", "proj-redis" }, provider.Removed);
+    }
+
+    [Fact]
+    public async Task Up_creates_the_default_network_and_attaches_services_to_it()
+    {
+        var provider = new FakeProvider("docker", true);
+        var engine = new ComposeEngine(new[] { provider });
+
+        await engine.UpAsync("proj", SingleService(), providerName: null, pull: false, buildPolicy: BuildPolicy.Auto, baseDirectory: null);
+
+        Assert.Contains(provider.EnsuredNetworks, n => n.Name == "proj_default" && n.Labels[WslccLabels.Network] == "default");
+        var spec = Assert.Single(provider.RunSpecs);
+        Assert.Equal("proj_default", spec.Network);
+        Assert.Equal("web", spec.NetworkAlias);
+        Assert.Empty(provider.Connected);
+    }
+
+    [Fact]
+    public async Task Up_provisions_declared_networks_and_volumes_with_project_prefixed_names()
+    {
+        var provider = new FakeProvider("docker", true);
+        var engine = new ComposeEngine(new[] { provider });
+        var file = new ComposeFile();
+        file.Services["web"] = new ServiceSpec { Name = "web", Image = "nginx", Networks = { "backend" } };
+        file.Networks["backend"] = new NetworkSpec { Name = "backend", Driver = "bridge" };
+        file.Volumes["data"] = new VolumeSpec { Name = "data" };
+
+        await engine.UpAsync("proj", file, providerName: null, pull: false, buildPolicy: BuildPolicy.Auto, baseDirectory: null);
+
+        Assert.Contains(provider.EnsuredNetworks, n => n.Name == "proj_backend" && n.Driver == "bridge"
+            && n.Labels[WslccLabels.Project] == "proj" && n.Labels[WslccLabels.Network] == "backend");
+        Assert.Contains(provider.EnsuredVolumes, v => v.Name == "proj_data"
+            && v.Labels[WslccLabels.Project] == "proj" && v.Labels[WslccLabels.Volume] == "data");
+        // No service uses the default network, so it is not created.
+        Assert.DoesNotContain(provider.EnsuredNetworks, n => n.Name == "proj_default");
+    }
+
+    [Fact]
+    public async Task Up_attaches_declared_networks_and_connects_extras()
+    {
+        var provider = new FakeProvider("docker", true);
+        var engine = new ComposeEngine(new[] { provider });
+        var file = new ComposeFile();
+        file.Services["web"] = new ServiceSpec { Name = "web", Image = "nginx", Networks = { "frontend", "backend" } };
+        file.Networks["frontend"] = new NetworkSpec { Name = "frontend" };
+        file.Networks["backend"] = new NetworkSpec { Name = "backend" };
+
+        await engine.UpAsync("proj", file, providerName: null, pull: false, buildPolicy: BuildPolicy.Auto, baseDirectory: null);
+
+        var spec = Assert.Single(provider.RunSpecs);
+        Assert.Equal("proj_frontend", spec.Network); // first network at creation time
+        var connected = Assert.Single(provider.Connected);
+        Assert.Equal(("proj_backend", "proj-web", "web"), connected);
+    }
+
+    [Fact]
+    public async Task Up_leaves_external_networks_and_volumes_unmanaged()
+    {
+        var provider = new FakeProvider("docker", true);
+        var engine = new ComposeEngine(new[] { provider });
+        var file = new ComposeFile();
+        file.Services["web"] = new ServiceSpec
+        {
+            Name = "web",
+            Image = "nginx",
+            Networks = { "shared" },
+            Volumes = { "ext:/data" },
+        };
+        file.Networks["shared"] = new NetworkSpec { Name = "shared", External = true };
+        file.Volumes["ext"] = new VolumeSpec { Name = "ext", External = true };
+
+        await engine.UpAsync("proj", file, providerName: null, pull: false, buildPolicy: BuildPolicy.Auto, baseDirectory: null);
+
+        Assert.Empty(provider.EnsuredNetworks); // external network is not created
+        Assert.Empty(provider.EnsuredVolumes);  // external volume is not created
+        var spec = Assert.Single(provider.RunSpecs);
+        Assert.Equal("shared", spec.Network);            // external network attached by its bare name
+        Assert.Contains("ext:/data", spec.Volumes);      // external volume referenced by its bare name
+    }
+
+    [Fact]
+    public async Task Up_resolves_named_bind_and_anonymous_mounts()
+    {
+        var provider = new FakeProvider("docker", true);
+        var engine = new ComposeEngine(new[] { provider });
+        var baseDir = Path.GetTempPath();
+        var file = new ComposeFile();
+        file.Services["web"] = new ServiceSpec
+        {
+            Name = "web",
+            Image = "nginx",
+            Volumes = { "data:/var/lib", "./conf:/etc/app:ro", "/var/log/host:/logs", "/scratch" },
+        };
+        file.Volumes["data"] = new VolumeSpec { Name = "data" };
+
+        await engine.UpAsync("proj", file, providerName: null, pull: false, buildPolicy: BuildPolicy.Auto, baseDirectory: baseDir);
+
+        var spec = Assert.Single(provider.RunSpecs);
+        Assert.Contains("proj_data:/var/lib", spec.Volumes);                             // named -> project-prefixed
+        Assert.Contains($"{Path.GetFullPath(Path.Combine(baseDir, "conf"))}:/etc/app:ro", spec.Volumes); // relative bind resolved
+        Assert.Contains("/var/log/host:/logs", spec.Volumes);                            // absolute bind unchanged
+        Assert.Contains("/scratch", spec.Volumes);                                       // anonymous unchanged
+    }
+
+    [Fact]
+    public async Task Down_removes_project_networks_but_keeps_volumes_by_default()
+    {
+        var provider = new FakeProvider("docker", true);
+        provider.Existing.Add(new ContainerInfo("id1", "proj-web", "nginx", "running", Service: "web"));
+        provider.NetworkNames.Add("proj_default");
+        provider.VolumeNames.Add("proj_data");
+        var engine = new ComposeEngine(new[] { provider });
+
+        var results = await engine.DownAsync("proj", file: null, providerName: null);
+
+        Assert.Equal(new[] { "proj_default" }, provider.RemovedNetworks);
+        Assert.Empty(provider.RemovedVolumes);
+        Assert.Contains(results, r => r.Service == "network proj_default" && r.Status == "removed");
+    }
+
+    [Fact]
+    public async Task Down_with_removeVolumes_removes_named_volumes()
+    {
+        var provider = new FakeProvider("docker", true);
+        provider.Existing.Add(new ContainerInfo("id1", "proj-web", "nginx", "running", Service: "web"));
+        provider.NetworkNames.Add("proj_default");
+        provider.VolumeNames.Add("proj_data");
+        var engine = new ComposeEngine(new[] { provider });
+
+        var results = await engine.DownAsync("proj", file: null, providerName: null, removeVolumes: true);
+
+        Assert.Equal(new[] { "proj_data" }, provider.RemovedVolumes);
+        Assert.Contains(results, r => r.Service == "volume proj_data" && r.Status == "removed");
     }
 
     private static FakeProvider ProviderWithTwoContainers()

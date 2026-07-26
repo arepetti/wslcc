@@ -48,6 +48,9 @@ public sealed class ComposeEngine : IComposeEngine
 
         var existingByService = await ListByServiceAsync(provider, projectName, cancellationToken).ConfigureAwait(false);
 
+        // Create the project's networks and named volumes up front so every service can attach to them.
+        await ProvisionResourcesAsync(provider, projectName, file, cancellationToken).ConfigureAwait(false);
+
         // --pull / --build ask for fresh images, so containers are always recreated to pick them up;
         // otherwise recreation is driven by the per-service config hash below.
         var forceRecreate = pull || buildPolicy == BuildPolicy.Always;
@@ -96,9 +99,29 @@ public sealed class ComposeEngine : IComposeEngine
                     spec.Labels[WslccLabels.ConfigHash] = configHash;
                 }
 
+                var networks = ResolveServiceNetworks(file, projectName, service);
+                if (networks.Count > 0)
+                {
+                    // The container is created on its first network (with the service name as an alias);
+                    // any additional networks are connected once it is running.
+                    spec.Network = networks[0];
+                    spec.NetworkAlias = service.Name;
+                }
+
+                foreach (var mount in service.Volumes)
+                {
+                    spec.Volumes.Add(ResolveMount(file, projectName, baseDirectory, mount));
+                }
+
                 await TryRemoveExistingAsync(provider, spec.Name, cancellationToken).ConfigureAwait(false);
 
                 var id = await provider.RunContainerAsync(spec, cancellationToken).ConfigureAwait(false);
+
+                for (var i = 1; i < networks.Count; i++)
+                {
+                    await provider.ConnectNetworkAsync(networks[i], spec.Name, service.Name, cancellationToken).ConfigureAwait(false);
+                }
+
                 startedContainers[service.Name] = spec.Name;
                 results.Add(new ServiceOperationResult(service.Name, "started", id));
             }
@@ -311,6 +334,7 @@ public sealed class ComposeEngine : IComposeEngine
         string projectName,
         ComposeFile? file,
         string? providerName,
+        bool removeVolumes = false,
         CancellationToken cancellationToken = default)
     {
         var provider = ResolveProvider(providerName);
@@ -345,7 +369,78 @@ public sealed class ComposeEngine : IComposeEngine
             }
         }
 
+        // Remove the networks wslcc created for the project (once their containers are gone). Named
+        // volumes are kept unless explicitly requested, matching `docker compose down` (data is precious).
+        await RemoveProjectResourcesAsync(provider, projectName, removeVolumes, results, cancellationToken)
+            .ConfigureAwait(false);
+
         return results;
+    }
+
+    /// <summary>
+    /// Best-effort teardown of the project's networks (always) and named volumes (only when requested).
+    /// Both are discovered by their <c>wslcc.project</c> label, so external resources — which wslcc never
+    /// labelled — are left untouched. Listing failures are swallowed so container removal still reports.
+    /// </summary>
+    private static async Task RemoveProjectResourcesAsync(
+        IContainerProvider provider,
+        string projectName,
+        bool removeVolumes,
+        List<ServiceOperationResult> results,
+        CancellationToken cancellationToken)
+    {
+        IReadOnlyList<string> networks;
+        try
+        {
+            networks = await provider.ListNetworkNamesAsync(projectName, cancellationToken).ConfigureAwait(false);
+        }
+        catch (ProviderException)
+        {
+            networks = Array.Empty<string>();
+        }
+
+        foreach (var network in networks)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            try
+            {
+                await provider.RemoveNetworkAsync(network, cancellationToken).ConfigureAwait(false);
+                results.Add(new ServiceOperationResult($"network {network}", "removed"));
+            }
+            catch (ProviderException ex)
+            {
+                results.Add(new ServiceOperationResult($"network {network}", "failed", Error: ex.Message));
+            }
+        }
+
+        if (!removeVolumes)
+        {
+            return;
+        }
+
+        IReadOnlyList<string> volumes;
+        try
+        {
+            volumes = await provider.ListVolumeNamesAsync(projectName, cancellationToken).ConfigureAwait(false);
+        }
+        catch (ProviderException)
+        {
+            volumes = Array.Empty<string>();
+        }
+
+        foreach (var volume in volumes)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            try
+            {
+                await provider.RemoveVolumeAsync(volume, cancellationToken).ConfigureAwait(false);
+                results.Add(new ServiceOperationResult($"volume {volume}", "removed"));
+            }
+            catch (ProviderException ex)
+            {
+                results.Add(new ServiceOperationResult($"volume {volume}", "failed", Error: ex.Message));
+            }
+        }
     }
 
     public Task<IReadOnlyList<ContainerInfo>> PsAsync(
@@ -515,6 +610,152 @@ public sealed class ComposeEngine : IComposeEngine
         }
 
         return Path.GetFullPath(Path.Combine(baseDirectory, context));
+    }
+
+    /// <summary>
+    /// Ensures the project's networks and named volumes exist before any container is started. Declared
+    /// networks/volumes are created project-prefixed and labelled (so <c>down</c> can find them); those
+    /// marked <c>external: true</c> are assumed to exist and are left alone. The implicit
+    /// <c>&lt;project&gt;_default</c> network is created whenever a service declares no networks of its own.
+    /// </summary>
+    private static async Task ProvisionResourcesAsync(
+        IContainerProvider provider,
+        string projectName,
+        ComposeFile file,
+        CancellationToken cancellationToken)
+    {
+        foreach (var kvp in file.Volumes)
+        {
+            if (kvp.Value.External)
+            {
+                continue;
+            }
+
+            var spec = new VolumeCreateSpec { Name = WslccLabels.VolumeName(projectName, kvp.Key), Driver = kvp.Value.Driver };
+            spec.Labels[WslccLabels.Project] = projectName;
+            spec.Labels[WslccLabels.Volume] = kvp.Key;
+            await provider.EnsureVolumeAsync(spec, cancellationToken).ConfigureAwait(false);
+        }
+
+        foreach (var kvp in file.Networks)
+        {
+            if (kvp.Value.External)
+            {
+                continue;
+            }
+
+            var spec = new NetworkCreateSpec { Name = WslccLabels.NetworkName(projectName, kvp.Key), Driver = kvp.Value.Driver };
+            spec.Labels[WslccLabels.Project] = projectName;
+            spec.Labels[WslccLabels.Network] = kvp.Key;
+            await provider.EnsureNetworkAsync(spec, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (file.Services.Values.Any(s => s.Networks.Count == 0))
+        {
+            var spec = new NetworkCreateSpec { Name = WslccLabels.DefaultNetworkName(projectName) };
+            spec.Labels[WslccLabels.Project] = projectName;
+            spec.Labels[WslccLabels.Network] = "default";
+            await provider.EnsureNetworkAsync(spec, cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// The networks a service attaches to: the ones it lists (mapped to their project-prefixed names, or
+    /// their bare name when the network is <c>external</c>), or the implicit default network when it
+    /// lists none.
+    /// </summary>
+    private static IReadOnlyList<string> ResolveServiceNetworks(ComposeFile file, string projectName, ServiceSpec service)
+    {
+        if (service.Networks.Count == 0)
+        {
+            return new[] { WslccLabels.DefaultNetworkName(projectName) };
+        }
+
+        return service.Networks
+            .Select(key => file.Networks.TryGetValue(key, out var spec) && spec.External
+                ? key
+                : WslccLabels.NetworkName(projectName, key))
+            .ToList();
+    }
+
+    /// <summary>
+    /// Resolves a service volume in Compose short syntax (<c>[SOURCE:]TARGET[:MODE]</c>) into a
+    /// <c>docker run -v</c> value: named-volume sources are mapped to their project-prefixed name (unless
+    /// external or undeclared), relative bind sources are resolved against the project directory, and
+    /// anonymous volumes (<c>TARGET</c> only) pass through unchanged.
+    /// </summary>
+    private static string ResolveMount(ComposeFile file, string projectName, string? baseDirectory, string raw)
+    {
+        var (source, target, mode) = SplitMount(raw);
+        if (source is null || target is null)
+        {
+            return raw;
+        }
+
+        var resolvedSource = IsBindSource(source)
+            ? ResolveBindSource(source, baseDirectory)
+            : ResolveVolumeSource(file, projectName, source);
+
+        return string.IsNullOrEmpty(mode) ? $"{resolvedSource}:{target}" : $"{resolvedSource}:{target}:{mode}";
+    }
+
+    /// <summary>
+    /// Splits a mount string into source / target / mode. A single segment is an anonymous volume
+    /// (target only). A leading Windows drive letter (e.g. <c>C:\path</c>) is kept with its source rather
+    /// than treated as a separator.
+    /// </summary>
+    private static (string? Source, string? Target, string? Mode) SplitMount(string raw)
+    {
+        var value = raw.Trim();
+        if (value.Length == 0)
+        {
+            return (null, null, null);
+        }
+
+        var parts = value.Split(':');
+
+        // Re-join a Windows drive ("C" + "\path") that ':' split apart.
+        if (parts.Length >= 2 && parts[0].Length == 1 && char.IsLetter(parts[0][0]))
+        {
+            parts = new[] { parts[0] + ":" + parts[1] }.Concat(parts.Skip(2)).ToArray();
+        }
+
+        return parts.Length switch
+        {
+            1 => (null, parts[0], null),
+            2 => (parts[0], parts[1], null),
+            3 => (parts[0], parts[1], parts[2]),
+            _ => (null, null, null), // malformed; caller passes the original through
+        };
+    }
+
+    private static bool IsBindSource(string source)
+        => source.StartsWith('/')
+            || source.StartsWith('.')
+            || source.StartsWith('~')
+            || source.Contains('/')
+            || source.Contains('\\')
+            || (source.Length >= 2 && char.IsLetter(source[0]) && source[1] == ':');
+
+    private static string ResolveBindSource(string source, string? baseDirectory)
+    {
+        if (Path.IsPathRooted(source) || source.StartsWith('~') || string.IsNullOrWhiteSpace(baseDirectory))
+        {
+            return source;
+        }
+
+        return Path.GetFullPath(Path.Combine(baseDirectory, source));
+    }
+
+    private static string ResolveVolumeSource(ComposeFile file, string projectName, string source)
+    {
+        if (file.Volumes.TryGetValue(source, out var spec))
+        {
+            return spec.External ? source : WslccLabels.VolumeName(projectName, source);
+        }
+
+        // Undeclared named volume: pass through (the runtime creates it implicitly, unscoped to wslcc).
+        return source;
     }
 
     /// <summary>

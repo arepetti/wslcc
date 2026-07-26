@@ -32,6 +32,27 @@ public interface IContainerProvider
     /// <summary>Creates and starts a container, returning its id.</summary>
     Task<string> RunContainerAsync(ContainerRunSpec spec, CancellationToken cancellationToken = default);
 
+    /// <summary>Creates a project network if it does not already exist (no-op when present).</summary>
+    Task EnsureNetworkAsync(NetworkCreateSpec spec, CancellationToken cancellationToken = default);
+
+    /// <summary>Creates a named volume if it does not already exist (no-op when present).</summary>
+    Task EnsureVolumeAsync(VolumeCreateSpec spec, CancellationToken cancellationToken = default);
+
+    /// <summary>Connects an already-running container to an additional network, optionally with an alias.</summary>
+    Task ConnectNetworkAsync(string network, string container, string? alias, CancellationToken cancellationToken = default);
+
+    /// <summary>Names of the networks labelled for the project (those wslcc created for it).</summary>
+    Task<IReadOnlyList<string>> ListNetworkNamesAsync(string projectName, CancellationToken cancellationToken = default);
+
+    /// <summary>Names of the volumes labelled for the project (those wslcc created for it).</summary>
+    Task<IReadOnlyList<string>> ListVolumeNamesAsync(string projectName, CancellationToken cancellationToken = default);
+
+    /// <summary>Removes a network (no-op-safe: callers treat failures as best-effort during teardown).</summary>
+    Task RemoveNetworkAsync(string network, CancellationToken cancellationToken = default);
+
+    /// <summary>Removes a named volume.</summary>
+    Task RemoveVolumeAsync(string volume, CancellationToken cancellationToken = default);
+
     /// <summary>Stops a running container (no-op if already stopped).</summary>
     Task StopContainerAsync(string container, CancellationToken cancellationToken = default);
 

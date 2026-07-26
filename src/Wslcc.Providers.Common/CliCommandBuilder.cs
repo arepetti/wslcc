@@ -44,6 +44,18 @@ public static class CliCommandBuilder
             args.Add($"{label.Key}={label.Value}");
         }
 
+        if (!string.IsNullOrEmpty(spec.Network))
+        {
+            args.Add("--network");
+            args.Add(spec.Network!);
+
+            if (!string.IsNullOrEmpty(spec.NetworkAlias))
+            {
+                args.Add("--network-alias");
+                args.Add(spec.NetworkAlias!);
+            }
+        }
+
         foreach (var env in spec.Environment)
         {
             args.Add("-e");
@@ -54,6 +66,12 @@ public static class CliCommandBuilder
         {
             args.Add("-p");
             args.Add(port);
+        }
+
+        foreach (var volume in spec.Volumes)
+        {
+            args.Add("-v");
+            args.Add(volume);
         }
 
         if (!string.IsNullOrWhiteSpace(spec.Restart))
@@ -187,6 +205,76 @@ public static class CliCommandBuilder
 
     public static string BuildInspectStateArguments(string container)
         => Join(new[] { "container", "inspect", "--format", InspectStateFormat, container });
+
+    public static string BuildNetworkCreateArguments(NetworkCreateSpec spec)
+    {
+        var args = new List<string> { "network", "create" };
+        if (!string.IsNullOrWhiteSpace(spec.Driver))
+        {
+            args.Add("--driver");
+            args.Add(spec.Driver!);
+        }
+
+        foreach (var label in spec.Labels)
+        {
+            args.Add("--label");
+            args.Add($"{label.Key}={label.Value}");
+        }
+
+        args.Add(spec.Name);
+        return Join(args);
+    }
+
+    public static string BuildNetworkInspectArguments(string network) => Join(new[] { "network", "inspect", network });
+
+    public static string BuildNetworkRemoveArguments(string network) => Join(new[] { "network", "rm", network });
+
+    public static string BuildNetworkConnectArguments(string network, string container, string? alias)
+    {
+        var args = new List<string> { "network", "connect" };
+        if (!string.IsNullOrWhiteSpace(alias))
+        {
+            args.Add("--alias");
+            args.Add(alias!);
+        }
+
+        args.Add(network);
+        args.Add(container);
+        return Join(args);
+    }
+
+    public static string BuildNetworkListNamesArguments(string projectName) => Join(new[]
+    {
+        "network", "ls", "--filter", $"label={WslccLabels.Project}={projectName}", "--format", "{{.Name}}",
+    });
+
+    public static string BuildVolumeCreateArguments(VolumeCreateSpec spec)
+    {
+        var args = new List<string> { "volume", "create" };
+        if (!string.IsNullOrWhiteSpace(spec.Driver))
+        {
+            args.Add("--driver");
+            args.Add(spec.Driver!);
+        }
+
+        foreach (var label in spec.Labels)
+        {
+            args.Add("--label");
+            args.Add($"{label.Key}={label.Value}");
+        }
+
+        args.Add(spec.Name);
+        return Join(args);
+    }
+
+    public static string BuildVolumeInspectArguments(string volume) => Join(new[] { "volume", "inspect", volume });
+
+    public static string BuildVolumeRemoveArguments(string volume) => Join(new[] { "volume", "rm", volume });
+
+    public static string BuildVolumeListNamesArguments(string projectName) => Join(new[]
+    {
+        "volume", "ls", "--filter", $"label={WslccLabels.Project}={projectName}", "--format", "{{.Name}}",
+    });
 
     public static string BuildStopArguments(string container) => Join(new[] { "stop", container });
 

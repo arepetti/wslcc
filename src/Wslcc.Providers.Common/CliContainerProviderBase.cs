@@ -57,6 +57,72 @@ public abstract class CliContainerProviderBase : IContainerProvider
         return LastNonEmptyLine(result!.StandardOutput);
     }
 
+    public async Task EnsureNetworkAsync(NetworkCreateSpec spec, CancellationToken cancellationToken = default)
+    {
+        // Idempotent: only create when the network is not already present.
+        var inspect = await TryRunAsync(CliCommandBuilder.BuildNetworkInspectArguments(spec.Name), cancellationToken)
+            .ConfigureAwait(false);
+        if (inspect is { Success: true })
+        {
+            return;
+        }
+
+        var create = await TryRunAsync(CliCommandBuilder.BuildNetworkCreateArguments(spec), cancellationToken)
+            .ConfigureAwait(false);
+        EnsureSuccess(create, $"create network '{spec.Name}'");
+    }
+
+    public async Task EnsureVolumeAsync(VolumeCreateSpec spec, CancellationToken cancellationToken = default)
+    {
+        var inspect = await TryRunAsync(CliCommandBuilder.BuildVolumeInspectArguments(spec.Name), cancellationToken)
+            .ConfigureAwait(false);
+        if (inspect is { Success: true })
+        {
+            return;
+        }
+
+        var create = await TryRunAsync(CliCommandBuilder.BuildVolumeCreateArguments(spec), cancellationToken)
+            .ConfigureAwait(false);
+        EnsureSuccess(create, $"create volume '{spec.Name}'");
+    }
+
+    public async Task ConnectNetworkAsync(string network, string container, string? alias, CancellationToken cancellationToken = default)
+    {
+        var result = await TryRunAsync(CliCommandBuilder.BuildNetworkConnectArguments(network, container, alias), cancellationToken)
+            .ConfigureAwait(false);
+        EnsureSuccess(result, $"connect container '{container}' to network '{network}'");
+    }
+
+    public async Task<IReadOnlyList<string>> ListNetworkNamesAsync(string projectName, CancellationToken cancellationToken = default)
+    {
+        var result = await TryRunAsync(CliCommandBuilder.BuildNetworkListNamesArguments(projectName), cancellationToken)
+            .ConfigureAwait(false);
+        EnsureSuccess(result, "list networks");
+        return ParseNames(result!.StandardOutput);
+    }
+
+    public async Task<IReadOnlyList<string>> ListVolumeNamesAsync(string projectName, CancellationToken cancellationToken = default)
+    {
+        var result = await TryRunAsync(CliCommandBuilder.BuildVolumeListNamesArguments(projectName), cancellationToken)
+            .ConfigureAwait(false);
+        EnsureSuccess(result, "list volumes");
+        return ParseNames(result!.StandardOutput);
+    }
+
+    public async Task RemoveNetworkAsync(string network, CancellationToken cancellationToken = default)
+    {
+        var result = await TryRunAsync(CliCommandBuilder.BuildNetworkRemoveArguments(network), cancellationToken)
+            .ConfigureAwait(false);
+        EnsureSuccess(result, $"remove network '{network}'");
+    }
+
+    public async Task RemoveVolumeAsync(string volume, CancellationToken cancellationToken = default)
+    {
+        var result = await TryRunAsync(CliCommandBuilder.BuildVolumeRemoveArguments(volume), cancellationToken)
+            .ConfigureAwait(false);
+        EnsureSuccess(result, $"remove volume '{volume}'");
+    }
+
     public async Task StopContainerAsync(string container, CancellationToken cancellationToken = default)
     {
         var result = await TryRunAsync(CliCommandBuilder.BuildStopArguments(container), cancellationToken).ConfigureAwait(false);
@@ -184,6 +250,22 @@ public abstract class CliContainerProviderBase : IContainerProvider
         }
 
         return containers;
+    }
+
+    /// <summary>Parses a newline-separated list of resource names (from a <c>--format {{.Name}}</c> listing).</summary>
+    internal static IReadOnlyList<string> ParseNames(string output)
+    {
+        var names = new List<string>();
+        foreach (var rawLine in output.Split('\n'))
+        {
+            var name = rawLine.Trim();
+            if (name.Length > 0)
+            {
+                names.Add(name);
+            }
+        }
+
+        return names;
     }
 
     private static string? ExtractLabel(string labels, string key)

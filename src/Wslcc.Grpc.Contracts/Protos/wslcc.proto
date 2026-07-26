@@ -114,6 +114,8 @@ message DownRequest {
   string default_project_name = 2;
   string compose_yaml = 3;
   string provider = 4;
+  // Also remove the project's named volumes (docker compose down --volumes). Off by default.
+  bool volumes = 5;
 }
 
 message DownResponse {

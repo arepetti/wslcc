@@ -43,6 +43,31 @@ A service whose required dependency fails to start, reports unhealthy, or exits 
 (the same hash `config --hash` reports), and a service whose container is still running with a matching
 hash is left in place. A changed hash, a stopped container, or `--pull`/`--build` recreates it.
 
+### Networks and volumes
+
+`up` provisions the project's networks and named volumes before starting containers, and `down` cleans
+them up:
+
+- **Networks.** Every declared `networks:` entry is created as `<project>_<name>` (Compose convention),
+  labelled with the project so it can be found later. A service attaches to the networks it lists; a
+  service that lists none joins an implicit `<project>_default` network created for the project. Because
+  each container is published on its network under its service name (a network alias), services reach
+  each other by service name. A service on more than one network is created on the first and connected
+  to the rest.
+- **Named volumes.** Every declared `volumes:` entry is created as `<project>_<name>`. In a service's
+  `volumes:` short syntax (`[SOURCE:]TARGET[:MODE]`), a source that matches a declared volume is
+  rewritten to that project-prefixed name; a path source (absolute, `./relative`, `~`, or a Windows
+  drive) is treated as a bind mount (relative paths resolve against the project directory); and a bare
+  `TARGET` is an anonymous volume.
+- **`external: true`** networks/volumes are assumed to already exist: they are never created or removed,
+  and are referenced by their bare name.
+- **Teardown.** `down` removes the project's networks after its containers. Named volumes are **kept** by
+  default (data is precious); pass `down --volumes` (`-v`) to remove them too. External resources are
+  left untouched.
+
+Only the common attributes are modeled (`driver`, `external`); richer per-network settings (IPAM,
+static addresses) and an explicit resource `name:` are not yet (see [todo.md](todo.md)).
+
 ## Resolution features
 
 The client resolver supports:

@@ -81,6 +81,74 @@ public sealed class CliCommandBuilderTests
     }
 
     [Fact]
+    public void BuildRunArguments_includes_network_alias_and_volumes()
+    {
+        var spec = new ContainerRunSpec { Image = "nginx", Name = "proj-web", Network = "proj_default", NetworkAlias = "web" };
+        spec.Volumes.Add("proj_data:/var/lib");
+        spec.Volumes.Add("/host:/app:ro");
+
+        var args = CliCommandBuilder.BuildRunArguments(spec);
+
+        Assert.Contains("--network proj_default", args);
+        Assert.Contains("--network-alias web", args);
+        Assert.Contains("-v proj_data:/var/lib", args);
+        Assert.Contains("-v /host:/app:ro", args);
+        Assert.EndsWith("nginx", args);
+    }
+
+    [Fact]
+    public void BuildNetworkCreateArguments_includes_driver_and_labels_with_name_last()
+    {
+        var spec = new NetworkCreateSpec { Name = "proj_backend", Driver = "bridge" };
+        spec.Labels["wslcc.project"] = "proj";
+
+        var args = CliCommandBuilder.BuildNetworkCreateArguments(spec);
+
+        Assert.StartsWith("network create", args);
+        Assert.Contains("--driver bridge", args);
+        Assert.Contains("--label wslcc.project=proj", args);
+        Assert.EndsWith("proj_backend", args);
+    }
+
+    [Fact]
+    public void BuildVolumeCreateArguments_includes_labels_with_name_last()
+    {
+        var spec = new VolumeCreateSpec { Name = "proj_data" };
+        spec.Labels["wslcc.volume"] = "data";
+
+        var args = CliCommandBuilder.BuildVolumeCreateArguments(spec);
+
+        Assert.StartsWith("volume create", args);
+        Assert.Contains("--label wslcc.volume=data", args);
+        Assert.EndsWith("proj_data", args);
+    }
+
+    [Fact]
+    public void BuildNetworkConnectArguments_includes_alias()
+    {
+        var args = CliCommandBuilder.BuildNetworkConnectArguments("proj_backend", "proj-web", "web");
+
+        Assert.Equal("network connect --alias web proj_backend proj-web", args);
+    }
+
+    [Fact]
+    public void BuildNetworkListNamesArguments_filters_by_project_label()
+    {
+        var args = CliCommandBuilder.BuildNetworkListNamesArguments("proj");
+
+        Assert.StartsWith("network ls", args);
+        Assert.Contains("--filter label=wslcc.project=proj", args);
+        Assert.Contains("--format {{.Name}}", args);
+    }
+
+    [Fact]
+    public void BuildVolumeRemoveArguments_targets_the_volume()
+    {
+        Assert.Equal("volume rm proj_data", CliCommandBuilder.BuildVolumeRemoveArguments("proj_data"));
+        Assert.Equal("network rm proj_default", CliCommandBuilder.BuildNetworkRemoveArguments("proj_default"));
+    }
+
+    [Fact]
     public void BuildInspectStateArguments_targets_container_with_the_state_format()
     {
         var args = CliCommandBuilder.BuildInspectStateArguments("proj-web");

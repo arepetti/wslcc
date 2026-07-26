@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using Grpc.Core;
 using Spectre.Console;
 using Spectre.Console.Cli;
@@ -6,10 +7,17 @@ using Wslcc.Grpc.Contracts;
 
 namespace Wslcc.Cli.Commands;
 
-/// <summary><c>wslcc compose down</c>: stop and remove the project's containers.</summary>
-public sealed class ComposeDownCommand : AsyncCommand<ComposeCommandSettings>
+/// <summary><c>wslcc compose down</c>: stop and remove the project's containers (and its networks).</summary>
+public sealed class ComposeDownCommand : AsyncCommand<ComposeDownCommand.Settings>
 {
-    protected override async Task<int> ExecuteAsync(CommandContext context, ComposeCommandSettings settings, CancellationToken cancellationToken)
+    public sealed class Settings : ComposeCommandSettings
+    {
+        [CommandOption("-v|--volumes")]
+        [Description("Also remove the project's named volumes. By default volumes are preserved.")]
+        public bool Volumes { get; set; }
+    }
+
+    protected override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
         if (!ComposeFiles.TryResolve(settings, out var inputs, out var loadError))
         {
@@ -23,6 +31,7 @@ public sealed class ComposeDownCommand : AsyncCommand<ComposeCommandSettings>
             DefaultProjectName = inputs?.DefaultProjectName ?? string.Empty,
             ComposeYaml = inputs?.Yaml ?? string.Empty,
             Provider = settings.Provider ?? string.Empty,
+            Volumes = settings.Volumes,
         };
 
         if (inputs is null && string.IsNullOrWhiteSpace(settings.ProjectName))

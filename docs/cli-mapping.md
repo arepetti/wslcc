@@ -8,8 +8,8 @@ WSLCC-specific commands. `wslcc compose ps` is the same token count as `docker c
 | Docker | WSLCC | Status |
 | --- | --- | --- |
 | `docker compose version` | `wslcc compose version` | Implemented (`--short`, `--format json\|pretty`) |
-| `docker compose up` | `wslcc compose up` | Implemented (attached by default, `-d`/`--detach` to background; `-f`, `-p`, `--pull`, `--build`, `--no-build`; auto-builds `build:` services when their image is missing; honors `depends_on` conditions and applies service healthchecks; leaves unchanged, still-running services in place) |
-| `docker compose down` | `wslcc compose down` | Implemented (`-f`, `-p`) |
+| `docker compose up` | `wslcc compose up` | Implemented (attached by default, `-d`/`--detach` to background; `-f`, `-p`, `--pull`, `--build`, `--no-build`; auto-builds `build:` services when their image is missing; honors `depends_on` conditions and applies service healthchecks; creates/attaches project networks and named volumes; leaves unchanged, still-running services in place) |
+| `docker compose down` | `wslcc compose down` | Implemented (`-f`, `-p`, `-v`/`--volumes`; removes project networks) |
 | `docker compose ps` | `wslcc compose ps` | Implemented (`-f`, `-p`, `-a`) |
 | `docker compose start` | `wslcc compose start` | Implemented (`-f`, `-p`, `[SERVICES]`) |
 | `docker compose stop` | `wslcc compose stop` | Implemented (`-f`, `-p`, `[SERVICES]`) |
@@ -48,6 +48,7 @@ Applied to `up`, `down`, `ps`, `start`, `stop`, `restart`, `pull`, `build`, `log
 | `--build` | (`up`) Always (re)build services with a `build:` section before starting, even if the image already exists. Mutually exclusive with `--no-build`. |
 | `--no-build` | (`up`) Never build; fail a `build:` service whose image is missing instead of building it. Mutually exclusive with `--build`. |
 | `-d`, `--detach` | (`up`) Start the services in the background and return. By default `up` stays attached, streaming the containers' combined logs until Ctrl+C, which then gracefully stops the project. |
+| `-v`, `--volumes` | (`down`) Also remove the project's named volumes. Off by default so data is preserved. |
 | `-a`, `--all` | (`ps`) Include stopped containers. |
 | `[SERVICES]` | (`start`, `stop`, `restart`, `pull`, `build`, `logs`) Optional service names to target. Defaults to every matching service. |
 | `--follow` | (`logs`) Keep streaming new log output; stop with Ctrl+C. No `-f` short form since `-f` is already `--file`. |
@@ -108,6 +109,13 @@ Applied to `up`, `down`, `ps`, `start`, `stop`, `restart`, `pull`, `build`, `log
 > **running** with a matching hash is left in place (reported as `running`) instead of being recreated.
 > Anything else — a changed hash, a stopped/absent container, or `--pull`/`--build` (which fetch fresh
 > images) — recreates the container.
+
+> `up` creates the project's declared `networks:` and named `volumes:` (each as `<project>_<name>`) plus
+> an implicit `<project>_default` network, and attaches every service to its networks under its service
+> name — so services resolve each other by name. `down` removes the project's networks once its
+> containers are gone; named volumes are preserved unless you pass `-v`/`--volumes`. Networks/volumes
+> marked `external: true` are referenced by their bare name and are never created or removed. See
+> [compose-file.md](compose-file.md#networks-and-volumes) for volume short-syntax handling.
 
 > `logs` merges output from every matching container (like `docker compose logs`), tagging each line
 > with its service name (`<service> | <line>`). It uses a server-streaming RPC, so `--follow` keeps the
