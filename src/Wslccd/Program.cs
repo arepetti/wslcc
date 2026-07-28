@@ -8,10 +8,19 @@ using Wslcc.Providers.DockerCompose;
 using Wslcc.Providers.Wslc;
 using Wslccd;
 
-var builder = WebApplication.CreateBuilder(args);
+// Pin the content root to the executable's folder so appsettings.json (the 'Wslcc' section) loads no
+// matter the launcher's working directory: 'wslcc daemon start', the 'daemon install' logon task, and a
+// manual service all start wslccd with different current directories.
+var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+{
+    Args = args,
+    ContentRootPath = AppContext.BaseDirectory,
+});
 
-// Allow running either as a Windows Service or as a normal per-user process. The service name must
-// match Wslcc.Cli's 'daemon install'/'uninstall' commands (see WslccdConstants).
+// wslccd normally runs as a per-user process (that's how 'daemon start' and the 'daemon install' logon
+// task launch it). UseWindowsService is a no-op then, but keeps the door open for an advanced user who
+// registers wslccd as a Windows Service manually; the name matches WslccdConstants for a friendly
+// Service Control Manager display name.
 builder.Host.UseWindowsService(options => options.ServiceName = WslccdConstants.ServiceName);
 
 var options = new DaemonOptions();
@@ -78,5 +87,5 @@ static string ResolveDaemonVersion()
         return plus >= 0 ? informational.Substring(0, plus) : informational;
     }
 
-    return typeof(Program).Assembly.GetName().Version?.ToString() ?? "0.1.0";
+    return typeof(Program).Assembly.GetName().Version?.ToString() ?? "0.1";
 }

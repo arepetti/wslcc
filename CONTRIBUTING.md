@@ -1,8 +1,6 @@
 # Contributing to WSLCC
 
-Thanks for your interest! WSLCC is a single-maintainer, spare-time project (see
-[GOVERNANCE.md](GOVERNANCE.md)). Contributions are welcome; please keep changes focused and discuss
-larger ideas in an issue first.
+Thanks for your interest! WSLCC is a single-maintainer, spare-time project (see [GOVERNANCE.md](GOVERNANCE.md)). Contributions are welcome; please keep changes focused and discuss larger ideas in an issue first.
 
 ## Prerequisites
 
@@ -27,13 +25,10 @@ wslcc daemon stop
 
 ## Project conventions
 
-- Central Package Management: add/adjust NuGet versions in
-  [`Directory.Packages.props`](Directory.Packages.props); reference packages without a `Version`.
-- Shared build settings live in [`Directory.Build.props`](Directory.Build.props). Style is enforced
-  via [`.editorconfig`](.editorconfig) (nullable enabled, file-scoped namespaces, 4-space indent).
+- Central Package Management: add/adjust NuGet versions in [`Directory.Packages.props`](Directory.Packages.props); reference packages without a `Version`.
+- Shared build settings live in [`Directory.Build.props`](Directory.Build.props). Style is enforced via [`.editorconfig`](.editorconfig) (nullable enabled, file-scoped namespaces, 4-space indent).
 - Every project targets `net10.0` (no `netstandard2.0` compatibility is maintained).
-- The WSL SDK path is isolated behind the `WSLC_SDK` compile constant so the solution builds without
-  the preview `Microsoft.WSL.Containers` package. Prefer that seam over sprinkling `#if` throughout.
+- The WSL SDK path is isolated behind the `WSLC_SDK` compile constant so the solution builds without the preview `Microsoft.WSL.Containers` package. Prefer that seam over sprinkling `#if` throughout.
 - Comments should explain intent/trade-offs, not restate the code.
 
 ## Pull requests
@@ -45,5 +40,4 @@ wslcc daemon stop
 
 ## Architecture
 
-See [docs/architecture.md](docs/architecture.md) and [docs/todo.md](docs/todo.md) before starting a
-significant change.
+See [docs/architecture.md](docs/architecture.md) and [docs/todo.md](docs/todo.md) before starting a significant change.

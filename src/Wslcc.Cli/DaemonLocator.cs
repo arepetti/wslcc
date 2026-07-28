@@ -43,6 +43,28 @@ internal static class DaemonLocator
         return null;
     }
 
+    /// <summary>
+    /// Resolves the <c>wslccd</c> path to record for autostart (the <c>wslcc daemon install</c>
+    /// per-user Run entry). Prefers the winget portable alias at
+    /// <c>%LOCALAPPDATA%\Microsoft\WinGet\Links\wslccd.exe</c> when present: that symlink always points
+    /// at the currently installed version, so autostart keeps working across winget upgrades. Falls back
+    /// to <see cref="Find"/> for dev builds and manually extracted ZIPs.
+    /// </summary>
+    public static string? FindForAutostart()
+    {
+        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        if (!string.IsNullOrEmpty(localAppData))
+        {
+            var wingetLink = Path.Combine(localAppData, "Microsoft", "WinGet", "Links", "wslccd.exe");
+            if (File.Exists(wingetLink))
+            {
+                return wingetLink;
+            }
+        }
+
+        return Find();
+    }
+
     private static string? FindIn(string directory)
     {
         foreach (var name in new[] { "wslccd.exe", "wslccd" })

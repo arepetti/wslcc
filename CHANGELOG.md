@@ -1,14 +1,12 @@
 # Changelog
 
-All notable changes to this project are documented here. The format is based on
-[Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
-[Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+All notable changes to this project are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.1] - 2026-07-26
 
 ### Added
 - Provider-agnostic engine with providers for WSL containers (`wslc`) and Docker Compose (`docker`).
-- `wslccd` daemon: gRPC over a named pipe (optional HTTP), runnable as a per-user process or a Windows Service.
+- `wslccd` daemon: gRPC over a named pipe (optional HTTP), runs as a per-user process (on demand or auto-started at logon).
 - `compose` commands mirroring `docker compose`:
   - `up` (attached by default — streams logs and gracefully stops on Ctrl+C — or `-d`/`--detach`; auto-builds `build:` services when their image is missing, with `--build`/`--no-build`/`--pull`), `down`, `ps`.
   - `start`, `stop`, `restart`, `pull`, `build`, `logs` (`--follow`, `--tail`, `--timestamps`, `--since`; a non-follow dump is merged in timestamp order across containers) — all scoped to optional `[SERVICES]`.
@@ -18,6 +16,6 @@ All notable changes to this project are documented here. The format is based on
   - `up` change-detection: an unchanged, still-running service (same config hash) is left in place instead of recreated; `--pull`/`--build` force recreation.
   - `up` creates the project's `networks:` and named `volumes:` (and a default network) and attaches each service, so services reach each other by name; `down` removes the project's networks, and `down --volumes`/`-v` also removes its named volumes.
 - Client-side compose file resolution: multi-file merge (`-f` repeatable, `COMPOSE_FILE`), `.env` (quotes, escapes, inline comments, multi-line and self-referencing values) and `${VAR}` interpolation (`--env-file`), `extends`, `profiles` (`--profile`, `COMPOSE_PROFILES`), and `--project-directory`.
-- Daemon commands: `daemon start`/`stop`/`status`, `daemon install`/`uninstall` (Windows Service), and top-level `version`.
+- Daemon commands: `daemon start`/`stop`/`status`, `daemon install`/`uninstall` (per-user autostart at logon, no elevation), and top-level `version`.
 - Options: `--no-color` (and `NO_COLOR`) on every command; `compose` commands use `--wslcc-host`/`--wslcc-provider`, while `version`/`daemon` commands use `-H`/`--host` (plus `--provider` on `daemon start`/`install` to set the daemon's default).
 - Targets `net10.0`.

@@ -1,7 +1,6 @@
 # Examples
 
-Sample Compose projects for WSLCC. These use standard Compose YAML, so they also work with
-`docker compose` (handy for comparing behavior while WSLCC's compose lifecycle is built out).
+Sample Compose projects for WSLCC. These use standard Compose YAML, so they also work with `docker compose` (handy for comparing behavior while WSLCC's compose lifecycle is built out).
 
 ## `web-redis/`
 

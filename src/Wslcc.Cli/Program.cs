@@ -53,9 +53,9 @@ app.Configure(config =>
         daemon.AddCommand<DaemonStatusCommand>("status")
             .WithDescription("Report whether the daemon is running.");
         daemon.AddCommand<DaemonInstallCommand>("install")
-            .WithDescription("Register wslccd as a Windows Service (requires Administrator).");
+            .WithDescription("Register a per-user autostart so wslccd starts at logon (no elevation).");
         daemon.AddCommand<DaemonUninstallCommand>("uninstall")
-            .WithDescription("Remove the wslccd Windows Service (requires Administrator).");
+            .WithDescription("Remove the per-user autostart entry.");
     });
 });
 

@@ -21,12 +21,12 @@
     <Company>Adriano Repetti</Company>
     <Product>WSLCC</Product>
     <Copyright>Copyright (c) Adriano Repetti</Copyright>
-    <PackageProjectUrl>https://github.com/arepetti002/wslcc</PackageProjectUrl>
-    <RepositoryUrl>https://github.com/arepetti002/wslcc</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/arepetti/wslcc</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/arepetti/wslcc</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
 
-    <VersionPrefix>0.1.0</VersionPrefix>
+    <VersionPrefix>0.1</VersionPrefix>
   </PropertyGroup>
 
 </Project>

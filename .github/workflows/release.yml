@@ -1,0 +1,58 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Resolve version from tag
+        id: version
+        shell: pwsh
+        run: |
+          $version = '${{ github.ref_name }}'.TrimStart('v')
+          "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Publish and package (self-contained win-x64)
+        shell: pwsh
+        run: ./scripts/publish.ps1 -Version ${{ steps.version.outputs.version }} -Phase Publish,Package
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: wslcc ${{ steps.version.outputs.version }}
+          files: dist/*.zip
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+
+  # Opt-in automatic winget update. Enable by setting repo variable
+  # WINGET_AUTO_SUBMIT=true and secret WINGET_TOKEN (a classic PAT that can fork/PR
+  # microsoft/winget-pkgs). Only updates an already-published package; the very first
+  # submission must be done once via `scripts/publish.ps1 -Phase Winget`.
+  winget:
+    needs: release
+    runs-on: ubuntu-latest
+    if: ${{ vars.WINGET_AUTO_SUBMIT == 'true' }}
+    steps:
+      - name: Submit to winget-pkgs
+        uses: vedantmgoyal9/winget-releaser@v2
+        with:
+          identifier: AdrianoRepetti.WSLCC
+          version: ${{ needs.release.outputs.version }}
+          installers-regex: 'wslcc-.*-win-x64\.zip$'
+          token: ${{ secrets.WINGET_TOKEN }}

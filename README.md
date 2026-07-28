@@ -7,7 +7,7 @@
 ## Components
 
 - `wslcc` — the command-line tool. Mirrors `docker compose ...` under a `compose` branch (`wslcc compose up`, `wslcc compose ps`, ...), plus `wslcc daemon ...` and `wslcc version`.
-- `wslccd` — a small background daemon exposing a gRPC service (named pipe locally; optional HTTP for remote). Runs as a per-user process or a Windows Service.
+- `wslccd` — a small background daemon exposing a gRPC service (named pipe locally; optional HTTP for remote). Runs as a per-user process, on demand or started automatically at logon.
 - A provider-agnostic core library, plus providers for **WSL containers** (`wslc`) and **Docker Compose** (`docker`).
 
 ```mermaid
@@ -34,9 +34,7 @@ wslcc compose version
 wslcc daemon stop
 ```
 
-`wslcc` talks to `wslccd` over a named pipe by default (`npipe://wslccd`). Use `-H`/`--host` to change
-transport (the `compose` commands use `--wslcc-host`/`--wslcc-provider` so they don't clash with standard
-`docker compose` options):
+`wslcc` talks to `wslccd` over a named pipe by default (`npipe://wslccd`). Use `-H`/`--host` to change transport (the `compose` commands use `--wslcc-host`/`--wslcc-provider` so they don't clash with standard `docker compose` options):
 
 ```powershell
 wslcc --? ; # help

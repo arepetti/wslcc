@@ -5,8 +5,9 @@ using Wslcc.Abstractions;
 namespace Wslcc.Cli.Commands;
 
 /// <summary>
-/// <c>wslcc daemon uninstall</c>: stops (if running) and removes the <c>wslccd</c> Windows Service
-/// registered by <c>wslcc daemon install</c>. Requires an elevated (Administrator) prompt.
+/// <c>wslcc daemon uninstall</c>: removes the per-user autostart entry (<c>HKCU\...\Run</c>) registered
+/// by <c>wslcc daemon install</c>. It does not stop an already-running daemon — use
+/// <c>wslcc daemon stop</c> for that. Needs no elevation.
 /// </summary>
 public sealed class DaemonUninstallCommand : AsyncCommand<GlobalSettings>
 {
@@ -14,52 +15,40 @@ public sealed class DaemonUninstallCommand : AsyncCommand<GlobalSettings>
     {
         if (!OperatingSystem.IsWindows())
         {
-            AnsiConsole.MarkupLine("[red]Windows Service registration is only supported on Windows.[/]");
+            AnsiConsole.MarkupLine("[red]Autostart registration is only supported on Windows.[/]");
             return 1;
         }
 
-        // Best-effort stop; a service that is not running or not installed fails here too, but the
-        // delete below reports the actual outcome (including "not installed").
-        var stopArgs = ServiceControlCommandBuilder.BuildStopArguments(WslccdConstants.ServiceName);
-        var stopResult = await ProcessRunner.TryRunAsync("sc.exe", stopArgs, cancellationToken).ConfigureAwait(false);
-        if (stopResult is { Success: true })
-        {
-            AnsiConsole.MarkupLine("[green]Service stopped.[/]");
-        }
-
-        var deleteArgs = ServiceControlCommandBuilder.BuildDeleteArguments(WslccdConstants.ServiceName);
-        var deleteResult = await ProcessRunner.TryRunAsync("sc.exe", deleteArgs, cancellationToken).ConfigureAwait(false);
+        var deleteArgs = AutostartCommandBuilder.BuildDeleteArguments(WslccdConstants.AutostartName);
+        var deleteResult = await ProcessRunner.TryRunAsync("reg.exe", deleteArgs, cancellationToken).ConfigureAwait(false);
 
         if (deleteResult is null)
         {
-            AnsiConsole.MarkupLine("[red]Could not run sc.exe.[/] Is it available on PATH?");
+            AnsiConsole.MarkupLine("[red]Could not run reg.exe.[/] Is it available on PATH?");
             return 1;
         }
 
         if (deleteResult.Success)
         {
-            AnsiConsole.MarkupLine($"[green]Service removed:[/] [bold]{WslccdConstants.ServiceName.EscapeMarkup()}[/].");
+            AnsiConsole.MarkupLine("[green]Autostart removed.[/]");
+            AnsiConsole.MarkupLine("A daemon that is already running keeps running; stop it with [bold]wslcc daemon stop[/].");
             return 0;
         }
 
-        if (deleteResult.ExitCode == 1060)
+        // reg.exe returns a non-zero exit code both when the value is absent and on real failures;
+        // treat the "cannot find" / "unable to find" message as success (nothing to remove).
+        var detail = deleteResult.StandardError.Length > 0 ? deleteResult.StandardError : deleteResult.StandardOutput;
+        if (detail.Contains("unable to find", StringComparison.OrdinalIgnoreCase)
+            || detail.Contains("cannot find", StringComparison.OrdinalIgnoreCase))
         {
-            AnsiConsole.MarkupLine($"[yellow]Not installed:[/] no [bold]{WslccdConstants.ServiceName.EscapeMarkup()}[/] service found.");
+            AnsiConsole.MarkupLine("[yellow]Not installed:[/] no autostart entry found.");
             return 0;
         }
 
-        AnsiConsole.MarkupLine($"[red]Failed to remove the service[/] (exit code {deleteResult.ExitCode}).");
-        if (deleteResult.ExitCode == 5)
+        AnsiConsole.MarkupLine($"[red]Failed to remove autostart[/] (exit code {deleteResult.ExitCode}).");
+        if (detail.Length > 0)
         {
-            AnsiConsole.MarkupLine("Access denied - re-run from an [bold]elevated[/] (Administrator) prompt.");
-        }
-        else
-        {
-            var detail = deleteResult.StandardError.Length > 0 ? deleteResult.StandardError : deleteResult.StandardOutput;
-            if (detail.Length > 0)
-            {
-                AnsiConsole.MarkupLine(detail.Trim().EscapeMarkup());
-            }
+            AnsiConsole.MarkupLine(detail.Trim().EscapeMarkup());
         }
 
         return 1;

@@ -1,34 +1,24 @@
 # Providers
 
-A provider is an implementation of `IContainerProvider` (in `Wslcc.Abstractions`). The core engine is
-provider-agnostic; the daemon registers the available providers and picks a default.
+A provider is an implementation of `IContainerProvider` (in `Wslcc.Abstractions`). The core engine is provider-agnostic; the daemon registers the available providers and picks a default.
 
-Select a provider per compose command with `--wslcc-provider <name>`; otherwise the daemon's configured
-`DefaultProvider` is used. Set that default once with `wslcc daemon start --provider <name>` (or
-`wslcc daemon install --provider <name>`), where `--provider` configures the daemon rather than a single
-call.
+Select a provider per compose command with `--wslcc-provider <name>`; otherwise the daemon's configured `DefaultProvider` is used. Set that default once with `wslcc daemon start --provider <name>` (or `wslcc daemon install --provider <name>`), where `--provider` configures the daemon rather than a single call.
 
 ## `wslc` — WSL containers
 
-`Wslcc.Providers.Wslc` targets Microsoft's WSL containers feature. It is designed around a thin seam,
-`IWslcClient`, with two implementations:
+`Wslcc.Providers.Wslc` targets Microsoft's WSL containers feature. It is designed around a thin seam, `IWslcClient`, with two implementations:
 
 - `WslcSdkClient` — uses the managed `Microsoft.WSL.Containers` SDK. **Gated** behind the `WSLC_SDK`
   compile constant, because the package is a preview and may not restore everywhere.
 - `WslcCliClient` — shells out to `wslc.exe`. Used as the fallback today.
 
-`WslcProvider.CreateDefaultClient()` chooses the SDK client when compiled with `WSLC_SDK`, otherwise
-the CLI client. As the SDK reaches API parity, flip the constant on and remove the CLI fallback. This
-keeps the "easy to fix later" requirement localized to one file.
+`WslcProvider.CreateDefaultClient()` chooses the SDK client when compiled with `WSLC_SDK`, otherwise the CLI client. As the SDK reaches API parity, flip the constant on and remove the CLI fallback. This keeps the "easy to fix later" requirement localized to one file.
 
-If `wslc` is not installed, the provider reports `IsAvailable = false` with guidance
-(`wsl --update --pre-release`) rather than throwing.
+If `wslc` is not installed, the provider reports `IsAvailable = false` with guidance (`wsl --update --pre-release`) rather than throwing.
 
 ## `docker` — Docker Compose
 
-`Wslcc.Providers.DockerCompose` shells out to the `docker` CLI and its `compose` plugin. It is useful
-for testing WSLCC today and for a single unified interface across both backends. If `docker` is not
-found, the provider reports `IsAvailable = false`.
+`Wslcc.Providers.DockerCompose` shells out to the `docker` CLI and its `compose` plugin. It is useful for testing WSLCC today and for a single unified interface across both backends. If `docker` is not found, the provider reports `IsAvailable = false`.
 
 ## Adding a provider
 

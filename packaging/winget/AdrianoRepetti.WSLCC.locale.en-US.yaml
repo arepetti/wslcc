@@ -1,0 +1,30 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.6.0.schema.json
+
+# TEMPLATE — see AdrianoRepetti.WSLCC.installer.yaml for how it is rendered.
+PackageIdentifier: AdrianoRepetti.WSLCC
+PackageVersion: __VERSION__
+PackageLocale: en-US
+Publisher: Adriano Repetti
+PublisherUrl: https://github.com/arepetti
+PublisherSupportUrl: https://github.com/arepetti/wslcc/issues
+PackageName: WSLCC
+PackageUrl: https://github.com/arepetti/wslcc
+License: MIT
+LicenseUrl: https://github.com/arepetti/wslcc/blob/main/LICENSE
+Copyright: Copyright (c) Adriano Repetti
+ShortDescription: A docker compose-style workflow for WSL containers (and Docker Compose).
+Description: |-
+  wslcc brings a docker compose-style workflow to Microsoft's WSL containers feature,
+  filling the gap of a missing compose command in wslc. It can also drive Docker Compose,
+  giving you a single, unified interface across both backends. Ships wslcc (the CLI) and
+  wslccd (a small gRPC daemon) side by side.
+Moniker: wslcc
+Tags:
+  - wsl
+  - containers
+  - compose
+  - docker
+  - cli
+  - devtools
+ManifestType: defaultLocale
+ManifestVersion: 1.6.0

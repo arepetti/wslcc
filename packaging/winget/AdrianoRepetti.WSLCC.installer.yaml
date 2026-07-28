@@ -1,0 +1,22 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.6.0.schema.json
+
+# TEMPLATE — not a submittable manifest on its own.
+# scripts/publish.ps1 fills in the version and installer hash, writing the rendered
+# manifests to dist/winget/<version>/ before winget validate / wingetcreate submit.
+PackageIdentifier: AdrianoRepetti.WSLCC
+PackageVersion: __VERSION__
+InstallerType: zip
+NestedInstallerType: portable
+NestedInstallerFiles:
+  - RelativeFilePath: wslcc.exe
+    PortableCommandAlias: wslcc
+  # wslccd gets its own alias so it has a stable path (…\WinGet\Links\wslccd.exe) that
+  # survives package upgrades — `wslcc daemon install` points its per-user autostart at it.
+  - RelativeFilePath: wslccd.exe
+    PortableCommandAlias: wslccd
+Installers:
+  - Architecture: x64
+    InstallerUrl: https://github.com/arepetti/wslcc/releases/download/v__VERSION__/wslcc-__VERSION__-win-x64.zip
+    InstallerSha256: __SHA256__
+ManifestType: installer
+ManifestVersion: 1.6.0

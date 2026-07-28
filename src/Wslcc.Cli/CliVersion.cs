@@ -18,6 +18,6 @@ internal static class CliVersion
             return plus >= 0 ? informational.Substring(0, plus) : informational;
         }
 
-        return typeof(CliVersion).Assembly.GetName().Version?.ToString() ?? "0.1.0";
+        return typeof(CliVersion).Assembly.GetName().Version?.ToString() ?? "0.1";
     }
 }
