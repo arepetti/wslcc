@@ -33,7 +33,7 @@ jobs:
         run: ./scripts/publish.ps1 -Version ${{ steps.version.outputs.version }} -Phase Publish,Package
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           name: wslcc ${{ steps.version.outputs.version }}
           files: dist/*.zip
