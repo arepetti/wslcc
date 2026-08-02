@@ -111,9 +111,9 @@ public interface IComposeEngine
 
     /// <summary>
     /// Pulls the image for each service defined in <paramref name="file"/> (always, regardless of
-    /// whether it is already present locally). When <paramref name="services"/> is null or empty,
-    /// every service with an image is pulled. Never throws for a single service failure; the outcome
-    /// is captured per service.
+    /// whether it is already present locally). Services with no <c>image:</c> (build-only) are
+    /// skipped. When <paramref name="services"/> is null or empty, every service with an image is
+    /// pulled. Never throws for a single service failure; the outcome is captured per service.
     /// </summary>
     Task<IReadOnlyList<ServiceOperationResult>> PullAsync(
         ComposeFile file,

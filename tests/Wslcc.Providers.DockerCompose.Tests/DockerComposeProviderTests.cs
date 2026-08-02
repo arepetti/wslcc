@@ -20,7 +20,7 @@ public sealed class DockerComposeProviderTests
         var info = await provider.GetProviderInfoAsync();
 
         Assert.Equal("docker", info.Name);
-        Assert.Equal("Docker Compose", info.DisplayName);
+        Assert.Equal("Docker", info.DisplayName);
         if (!info.IsAvailable)
         {
             Assert.False(string.IsNullOrEmpty(info.Details));

@@ -3,14 +3,14 @@
 ## SYNOPSIS
 
 ```
-wslcc [--no-color] <command> [<args>]
+wslcc <command> [<args>] [--no-color]
 wslcc --version | -v
 wslcc --help | -h
 ```
 
 ## DESCRIPTION
 
-`wslcc` is the command-line interface for WSLCC, a provider-agnostic container orchestrator for Windows. It talks to a small background daemon, `wslccd`, over a local named pipe (or, optionally, a remote HTTP/2 endpoint) — see [daemon.md](daemon.md). The daemon in turn drives one of two providers: WSL containers (`wslc`) or Docker Compose (`docker`) — see [providers.md](providers.md).
+`wslcc` is the command-line interface for WSLCC, a provider-agnostic container orchestrator for Windows. It talks to a small background daemon, `wslccd`, over a local named pipe (or, optionally, a remote HTTP/2 endpoint) — see [daemon.md](daemon.md). The daemon in turn drives one of two providers: WSL containers (`wslc`) or the Docker CLI (`docker`) — see [providers.md](providers.md).
 
 Commands are organized under two branches, plus one top-level command:
 
@@ -23,6 +23,8 @@ Commands are organized under two branches, plus one top-level command:
 One option is available on **every** command, supplied after the subcommand (e.g. `wslcc compose up --no-color`):
 
 **--no-color** :   Disable colored output for this invocation. Also honored via the `NO_COLOR` environment variable — see [Environment variables](#environment-variables). Spectre.Console (the rendering library `wslcc` is built on) additionally auto-disables color when output is not a terminal (piped or redirected), so scripts rarely need this explicitly.
+
+Options must follow the leaf command. Spectre.Console.Cli binds options on the leaf settings type, so placing a compose/daemon option *before* the leaf (`wslcc compose --project-directory x up`, `wslcc --no-color version`) is rejected or silently discarded — always write `wslcc compose up --project-directory x`, `wslcc version --no-color`.
 
 The daemon endpoint and target provider are deliberately **not** global — see [Project name and connection](#project-name-and-connection) for why, and which option each command family actually uses.
 
@@ -57,7 +59,7 @@ wslcc -v
 
 ## DAEMON COMMANDS
 
-Commands under `wslcc daemon` manage the `wslccd` background process. See [daemon.md](daemon.md) for how the daemon itself works (transport, configuration, autostart mechanics). Every command here shares one connection option:
+Commands under `wslcc daemon` manage the `wslccd` background process. See [daemon.md](daemon.md) for how the daemon itself works (transport, configuration, autostart mechanics). Every command here **except `uninstall`** shares one connection option (`uninstall` only edits the registry and never contacts a daemon):
 
 **-H, --host** _uri_ :   Daemon endpoint. See [Project name and connection](#project-name-and-connection) for the `npipe://`/`http(s)://` syntax. Default: `npipe://wslccd`. Kept as the plain, unprefixed name (unlike the compose commands) because these commands aren't part of the `docker compose` surface `wslcc compose` mirrors, so there's no standard name to avoid colliding with.
 
@@ -71,7 +73,7 @@ wslcc daemon start [--provider <name>] [-H|--host <uri>]
 
 **--provider** _name_ :   Provider to make the daemon's **default** (`wslc` or `docker`) — persisted for the life of that daemon process by passing `--Wslcc:DefaultProvider=<name>` on its command line, so every later command that doesn't pass its own provider override uses this one. If the daemon is already running with a different default, `start` warns rather than silently ignoring the mismatch; changing it requires `wslcc daemon stop` followed by `daemon start --provider <name>` again.
 
-Only manages a **local** daemon — reachable over a named pipe. Passing an `http(s)://` `--host` (a remote daemon) is rejected, since there's nothing local to launch. `wslccd` is located via the `WSLCCD_PATH` environment variable, otherwise next to `wslcc.exe` (see [Environment variables](#environment-variables)).
+Only manages a **local** daemon — reachable over a named pipe. Passing an `http(s)://` `--host` (a remote daemon) is rejected, since there's nothing local to launch. `wslccd` is located via `WSLCCD_PATH`, then next to `wslcc.exe`, then (in a development checkout) the sibling artifacts output — see [daemon.md](daemon.md) and [Environment variables](#environment-variables).
 
 ---
 
@@ -101,7 +103,7 @@ Exits `0` when the daemon responds (printing its version and configured default 
 
 ### wslcc daemon install
 
-Register a **per-user autostart** so `wslccd` launches automatically every time you sign in — no Windows Service, no Administrator elevation.
+Register a **per-user autostart** so `wslccd` launches automatically every time you sign in — no Windows Service, no Administrator elevation. Mechanics (HKCU Run key, winget alias, optional machine-wide `sc.exe` note) are documented in [daemon.md](daemon.md#autostart-at-logon).
 
 ```
 wslcc daemon install [--start] [--provider <name>] [-H|--host <uri>]
@@ -111,15 +113,11 @@ wslcc daemon install [--start] [--provider <name>] [-H|--host <uri>]
 
 **--provider** _name_ :   Same meaning as on `daemon start` — persists this provider as the default for every future autostarted launch.
 
-Mechanically, this writes a value named `WSLCC Daemon` under `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` (via `reg.exe`) that points at `wslccd`. `HKCU` is writable without elevation, and the daemon then runs in *your* session at logon — where it can see your WSL distros and Docker context, which a `LocalSystem` Windows Service in session 0 could not. Re-running `install` overwrites the existing entry, so it's safe to run again (e.g. to change `--provider`). If `wslcc` was installed via winget, the entry points at the stable `%LOCALAPPDATA%\Microsoft\WinGet\Links\wslccd.exe` alias so it keeps working across package upgrades; otherwise it falls back to the same resolution as `daemon start` (`WSLCCD_PATH`, then next to `wslcc.exe`).
-
-> Need a machine-wide daemon that runs without anyone signed in? `wslccd` still calls `UseWindowsService`, so an administrator *can* register it manually with `sc.exe create` — but it would then run as `LocalSystem` in session 0 and generally can't reach a user's WSL/Docker context. The per-user autostart above is the model this CLI is built around; see [roadmap.md](roadmap.md) for a possible future MSI-based machine-wide service.
-
 ---
 
 ### wslcc daemon uninstall
 
-Remove the autostart entry created by `daemon install`.
+Remove the autostart entry created by `daemon install` (see [daemon.md](daemon.md#autostart-at-logon)).
 
 ```
 wslcc daemon uninstall
@@ -144,8 +142,8 @@ These select **which** files make up the project and **which** of its services/p
 | `-f`, `--file <path>` | Compose file to load. **Repeatable** (`-f a.yaml -f b.yaml`) — later files override earlier ones using Compose's per-attribute merge rules (see [compose-file.md#resolution-features](compose-file.md#resolution-features)). |
 | `-p`, `--project-name <name>` | Project name. See [Project name](#project-name-and-connection) for how the effective name is chosen. |
 | `--profile <name>` | Activate a profile. Repeatable. See [compose-file.md#profiles](compose-file.md#profiles). |
-| `--env-file <path>` | Environment file used for `${VAR}` interpolation. Defaults to `.env` in the project directory when present. |
-| `--project-directory <path>` | Alternate project directory. Changes the default `.env` location, the base for relative `build.context`/bind-mount paths, and the default project name. Defaults to the first `-f` file's directory. |
+| `--env-file <path>` | Environment file used for `${VAR}` interpolation. Defaults to `.env` in the current working directory when present (or in `--project-directory` when that option is set). |
+| `--project-directory <path>` | Alternate project directory. Changes the default `.env` location, the base for relative `build.context`/bind-mount paths, and the default project name. Without it, build/bind/project-name resolution use the first `-f` file's directory, while the default `.env` still comes from the current working directory. |
 
 **File discovery.** With no `-f`, `wslcc` looks for `COMPOSE_FILE` in the environment (paths separated by `COMPOSE_PATH_SEPARATOR`, defaulting to `;` on Windows); if that's unset too, it looks in the project directory for `compose.yaml`, then `compose.yml`, then `docker-compose.yaml`, then `docker-compose.yml`, using the first one found. A command that needs a project and finds none this way (no `-f`, no `COMPOSE_FILE`, no conventional file present, and — for commands where it would help — no `-p` either) fails with a clear "no compose file found" message rather than guessing.
 
@@ -157,7 +155,7 @@ Resolution — merging files, loading `.env`, interpolating variables, resolving
 
 **Daemon endpoint.** Every compose command except `config` (which is entirely client-side, see below) talks to `wslccd`, and needs to know where it is:
 
-**--wslcc-host** _uri_ :   `npipe://<name>` (default `npipe://wslccd`) for a local named pipe, or `npipe://<server>/<name>` for one on a remote machine, or `http(s)://host:port` for a remote daemon over HTTP/2. Named `--wslcc-host` rather than plain `--host` specifically so it can never collide with a real `docker compose` option, since `wslcc compose` otherwise mirrors that CLI's flag names on purpose.
+**--wslcc-host** _uri_ :   `npipe://<name>` (default `npipe://wslccd`) for a local named pipe, or `http(s)://host:port` for a remote daemon over HTTP/2. The form `npipe://<server>/<name>` is parsed for a remote Windows named pipe but is **not a supported/tested transport** today (local pipe ACLs and anonymous impersonation make cross-machine use unlikely to work). Named `--wslcc-host` rather than plain `--host` specifically so it can never collide with a real `docker compose` option, since `wslcc compose` otherwise mirrors that CLI's flag names on purpose.
 
 **--wslcc-provider** _name_ :   Target `wslc` or `docker` for this one command, overriding the daemon's configured default. Same `--wslcc-` prefix rationale as above.
 
@@ -233,7 +231,7 @@ wslcc compose ps [-a|--all] [OPTIONS]
 
 **-a, --all** :   Include stopped containers (default: running only).
 
-Unlike the other compose commands, `ps` with **no** `-f`/`-p` at all doesn't fail — it lists every `wslcc`-managed container across **every** project, with an extra `Project` column. Supply `-f` or `-p` to scope the listing to one project (the `Project` column is then redundant and omitted).
+Unlike the other compose commands, `ps` does not fail when no project can be identified — it then lists every `wslcc`-managed container across **every** project, with an extra `Project` column. Supply `-f` or `-p` to scope the listing to one project (the `Project` column is then redundant and omitted). Note that with no `-f`/`-p`, file discovery still runs in the current directory: if a conventional compose file is found there, `ps` is scoped to that project (the usual case when you run it inside a project folder). The all-projects listing appears only when discovery finds nothing and no `-p` was given.
 
 ---
 
@@ -259,7 +257,7 @@ Stop the project's containers without removing them.
 wslcc compose stop [SERVICES] [OPTIONS]
 ```
 
-**[SERVICES]** :   Service names to stop. Optional — defaults to every running service. Same unknown-name rejection as `start`.
+**[SERVICES]** :   Service names to stop. Optional — defaults to every service with an existing container (stopped ones included; stopping an already-stopped container is a no-op at the runtime). Same unknown-name rejection as `start`.
 
 Processes services in **reverse** dependency order (dependents first, mirroring `down`) — see [Startup order](#startup-order-dependencies-and-health). Requires a project.
 
@@ -287,7 +285,7 @@ Pull each service's image, unconditionally (bypassing whatever is already cached
 wslcc compose pull [SERVICES] [OPTIONS]
 ```
 
-**[SERVICES]** :   Service names to pull. Optional — defaults to every service that has an `image:`. Same unknown-name rejection as `start`. Requires a compose file (pulling needs to read each service's image reference from it — a bare `-p` isn't enough).
+**[SERVICES]** :   Service names to pull. Optional — defaults to every service that has an `image:` (build-only services are skipped, not failed). Same unknown-name rejection as `start`. Requires a compose file (pulling needs to read each service's image reference from it — a bare `-p` isn't enough).
 
 ---
 
@@ -365,22 +363,22 @@ Full key-by-key detail on what gets resolved is in [compose-file.md#resolution-f
 
 ## STARTUP ORDER, DEPENDENCIES, AND HEALTH
 
-`up`, and the container ordering used by `start`/`stop`/`restart`/`logs`/`down`, follow each service's `depends_on:`:
+Command-level rules for `depends_on` ordering:
 
 - `start`, `restart`, and `logs` process services in dependency order (**dependencies first**).
 - `stop` and `down` use the **reverse** order (**dependents first**).
 - Naming a `[SERVICES]` argument the project doesn't define (or, when scoped only by `-p` with no compose file, one with no existing container) is rejected with `no such service: <name>` rather than silently ignored; `pull` and `build` reject unknown names against the compose file the same way.
 - Ordering needs the compose file. With only `-p <project>` (no `-f`/conventional file found), the daemon has no dependency graph for that project and falls back to listing order.
 
-`up` additionally honors `depends_on`'s **conditions** — `service_started` (default, order only), `service_healthy` (waits for the dependency's healthcheck), and `service_completed_successfully` (waits for exit code `0`) — and fails a service whose *required* dependency doesn't come up, which cascades to that service's own dependents. Full syntax and the exact healthcheck fields are documented in [compose-file.md#startup-order-and-health](compose-file.md#startup-order-and-health).
+`up` also waits on `depends_on` **conditions** (including a **5-minute** cap). YAML syntax, healthchecks, and `required:` are documented once in [compose-file.md#startup-order-and-health](compose-file.md#startup-order-and-health).
 
 ## CHANGE DETECTION
 
-`up` recreates a container only when something actually changed: each container carries a `wslcc.config-hash` label (the same hash `config --hash` reports), and a service whose container is still **running** with a matching hash is left alone — reported as `running` rather than `started`. `--pull`/`--build` always force recreation (they fetch fresh content). Details: [compose-file.md#change-detection-up](compose-file.md#change-detection-up).
+`up` leaves an unchanged, still-**running** container in place (config-hash match); `--pull`/`--build` force recreation. Semantics: [compose-file.md#change-detection-up](compose-file.md#change-detection-up).
 
 ## NETWORKS AND VOLUMES
 
-`up` creates the project's declared `networks:` and named `volumes:` (plus an implicit default network) and attaches every service to its networks under its service name, so services resolve each other by name with no extra configuration. `down` removes the project's networks once its containers are gone; named volumes are preserved unless you pass `-v`/`--volumes`. `external: true` resources are never created or removed either way. Full mount-syntax handling (bind vs. named vs. anonymous volumes) is in [compose-file.md#networks-and-volumes](compose-file.md#networks-and-volumes).
+`up` creates project networks/named volumes (plus an implicit default network) and attaches services by name; `down` removes networks and, with `-v`/`--volumes`, named volumes. `external: true` is never created or removed. Mount syntax and naming: [compose-file.md#networks-and-volumes](compose-file.md#networks-and-volumes).
 
 ---
 
@@ -400,21 +398,21 @@ Full key-by-key detail on what gets resolved is in [compose-file.md#resolution-f
 | `COMPOSE_FILE` | compose commands | Compose file(s) to load when no `-f` is given — see [File discovery](#compose-file-and-project-options). |
 | `COMPOSE_PATH_SEPARATOR` | compose commands | Separator used to split `COMPOSE_FILE` into multiple paths. Defaults to `;` on Windows. |
 | `COMPOSE_PROFILES` | compose commands | Comma-separated profiles to activate, unioned with `--profile` — see [compose-file.md#profiles](compose-file.md#profiles). |
-| `WSLCCD_PATH` | `daemon start`, `daemon install` (fallback) | Explicit path to `wslccd(.exe)`, checked before the default "next to `wslcc.exe`" search. |
+| `WSLCCD_PATH` | `daemon start`, `daemon install` (fallback) | Explicit path to `wslccd(.exe)`, checked before "next to `wslcc.exe`" and the development sibling-artifacts fallback. |
 | `WSLCC_DEBUG` | compose commands | Set to `1` to print full exception detail on an RPC failure instead of a friendly summary. |
 
 ---
 
 ## COMING FROM DOCKER COMPOSE
 
-If you already know `docker compose`, this table is a quick lookup — but the sections above are the actual reference; use them for anything beyond "what's the command called".
+If you already know `docker compose`, this table is a quick lookup — but the sections above are the actual reference; use them for anything beyond "what's the command called". For a full migration checklist (labels/interop, `.env` location, silent no-ops, missing verbs/flags, file fidelity), see **[compatibility.md](compatibility.md)**.
 
 | Docker Compose | wslcc | Notable difference |
 | --- | --- | --- |
 | `docker compose version` | `wslcc compose version` | — |
-| `docker compose up` | `wslcc compose up` | **Attached by default** here (Compose defaults to detached); `-d`/`--detach` for the Compose-like behavior. |
-| `docker compose down` | `wslcc compose down` | — |
-| `docker compose ps` | `wslcc compose ps` | With no `-f`/`-p`, lists containers across **all** projects, not just the one in the current directory. |
+| `docker compose up` | `wslcc compose up` | **Attached by default** here (Compose defaults to detached); `-d`/`--detach` for the Compose-like behavior. No `[SERVICES]` argument — always acts on the whole project. |
+| `docker compose down` | `wslcc compose down` | No `[SERVICES]` argument — always tears down the whole project. |
+| `docker compose ps` | `wslcc compose ps` | With no `-f`/`-p` **and** no compose file discovered in the current directory, lists containers across **all** projects; otherwise scoped like Compose. |
 | `docker compose start` / `stop` / `restart` | `wslcc compose start` / `stop` / `restart` | Unknown `[SERVICES]` names are a hard error here, not silently ignored. |
 | `docker compose pull` / `build` | `wslcc compose pull` / `build` | — |
 | `docker compose logs` | `wslcc compose logs` | Non-`--follow` output is sorted by timestamp across containers, not grouped container-by-container. |
@@ -423,8 +421,6 @@ If you already know `docker compose`, this table is a quick lookup — but the s
 | n/a | `--wslcc-provider` (compose) / `--provider` (`daemon start`/`install`) | WSLCC-specific: which backend (`wslc` or `docker`) executes the command. |
 | n/a | `wslcc daemon ...` | WSLCC-specific: manage the background `wslccd` process itself. |
 
-The full, honest list of where the underlying compose *file* support falls short of Docker Compose's own (rather than just being renamed or reordered) is in [compose-file.md#known-limitations](compose-file.md#known-limitations).
-
 ## SEE ALSO
 
-[compose-file.md](compose-file.md) (compose file format reference), [daemon.md](daemon.md) (the `wslccd` background process), [providers.md](providers.md) (the `wslc`/`docker` backends), [architecture.md](architecture.md), [roadmap.md](roadmap.md), [todo.md](todo.md).
+[compatibility.md](compatibility.md) (Docker Compose migration / differences), [compose-file.md](compose-file.md) (compose file format reference), [daemon.md](daemon.md) (the `wslccd` background process), [providers.md](providers.md) (the `wslc`/`docker` backends), [troubleshooting.md](troubleshooting.md), [architecture.md](architecture.md), [roadmap.md](roadmap.md), [todo.md](todo.md).

@@ -5,11 +5,14 @@ namespace Wslcc.Providers.DockerCompose;
 
 /// <summary>
 /// Provider that delegates to the local <c>docker</c> CLI. Container operations come from
-/// <see cref="CliContainerProviderBase"/>; version detection uses the compose plugin.
+/// <see cref="CliContainerProviderBase"/>; version reporting uses <c>docker compose version</c>
+/// (orchestration itself is WSLCC's engine, not the Compose plugin).
 /// </summary>
 public sealed class DockerComposeProvider : CliContainerProviderBase
 {
     public const string ProviderName = "docker";
+
+    private const string DisplayName = "Docker";
 
     protected override string Executable => "docker";
 
@@ -24,7 +27,7 @@ public sealed class DockerComposeProvider : CliContainerProviderBase
         {
             return new ProviderInfo(
                 ProviderName,
-                "Docker Compose",
+                DisplayName,
                 IsAvailable: false,
                 Version: null,
                 Details: "The 'docker' executable was not found on PATH.");
@@ -35,7 +38,7 @@ public sealed class DockerComposeProvider : CliContainerProviderBase
             var detail = result.StandardError.Trim();
             return new ProviderInfo(
                 ProviderName,
-                "Docker Compose",
+                DisplayName,
                 IsAvailable: false,
                 Version: null,
                 Details: string.IsNullOrEmpty(detail) ? "'docker compose' is not available." : detail);
@@ -43,7 +46,7 @@ public sealed class DockerComposeProvider : CliContainerProviderBase
 
         return new ProviderInfo(
             ProviderName,
-            "Docker Compose",
+            DisplayName,
             IsAvailable: true,
             Version: result.StandardOutput.Trim());
     }

@@ -280,6 +280,10 @@ public sealed class WslccGrpcService : global::Wslcc.Grpc.Contracts.Wslcc.WslccB
         {
             // The client stopped following (e.g. Ctrl+C) or disconnected; nothing more to send.
         }
+        catch (ComposeLoadException ex)
+        {
+            throw new RpcException(new Status(StatusCode.InvalidArgument, ex.Message));
+        }
         catch (ProviderException ex)
         {
             throw new RpcException(new Status(StatusCode.FailedPrecondition, ex.Message));
@@ -300,6 +304,10 @@ public sealed class WslccGrpcService : global::Wslcc.Grpc.Contracts.Wslcc.WslccB
         {
             return await operation().ConfigureAwait(false);
         }
+        catch (ComposeLoadException ex)
+        {
+            throw new RpcException(new Status(StatusCode.InvalidArgument, ex.Message));
+        }
         catch (ProviderException ex)
         {
             throw new RpcException(new Status(StatusCode.FailedPrecondition, ex.Message));
@@ -311,7 +319,21 @@ public sealed class WslccGrpcService : global::Wslcc.Grpc.Contracts.Wslcc.WslccB
     }
 
     private static ComposeFile? Parse(string? yaml)
-        => string.IsNullOrWhiteSpace(yaml) ? null : new ComposeFileParser().Parse(yaml!);
+    {
+        if (string.IsNullOrWhiteSpace(yaml))
+        {
+            return null;
+        }
+
+        try
+        {
+            return new ComposeFileParser().Parse(yaml!);
+        }
+        catch (ComposeLoadException ex)
+        {
+            throw new RpcException(new Status(StatusCode.InvalidArgument, ex.Message));
+        }
+    }
 
     private static string? NullIfEmpty(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
 

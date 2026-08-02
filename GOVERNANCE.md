@@ -15,11 +15,13 @@ WSLCC is a single-maintainer, spare-time open-source project. This document sets
 ## Scope
 
 - The project aims to provide a `docker compose`-style experience for WSL containers, with a unified interface across providers. Features outside that scope may be declined to keep the project maintainable.
+- Near-term scope and exit criteria are in [docs/roadmap.md](docs/roadmap.md); the deferred backlog is [docs/todo.md](docs/todo.md). Issue-tracking conventions are in [CONTRIBUTING.md](CONTRIBUTING.md#planning-and-issues).
 
 ## Expectations and cadence
 
 - This is spare-time work: reviews, responses, and releases are best-effort with no SLA.
-- Breaking changes are expected while the project is pre-1.0 and are recorded in [CHANGELOG.md](CHANGELOG.md).
+- Breaking changes are expected while the project is pre-1.0 and are recorded in [CHANGELOG.md](CHANGELOG.md) under `[Unreleased]` until the first tag.
+- “Pre-1.0” means milestone **1.0** in the roadmap has not met its exit criteria — not merely that the version string is below 1.0.
 
 ## Continuity
 

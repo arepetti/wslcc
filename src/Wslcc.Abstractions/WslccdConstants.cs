@@ -8,8 +8,9 @@ public static class WslccdConstants
 {
     /// <summary>
     /// Windows Service name used by <c>UseWindowsService</c>. The CLI no longer registers a service
-    /// (it uses a per-user logon task, see <see cref="AutostartTaskName"/>), but the daemon keeps this
-    /// name so an advanced user who registers it manually with <c>sc.exe</c> still gets a friendly name.
+    /// (it uses a per-user HKCU Run autostart entry, see <see cref="AutostartName"/>), but the daemon
+    /// keeps this name so an advanced user who registers it manually with <c>sc.exe</c> still gets a
+    /// friendly name.
     /// </summary>
     public const string ServiceName = "WSLCC Daemon";
 

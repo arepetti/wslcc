@@ -17,7 +17,7 @@
     Directory.Build.props, so a normal release is just:  ./scripts/publish.ps1
 
 .PARAMETER Version
-    Package version (e.g. 0.1). Defaults to VersionPrefix from Directory.Build.props.
+    Package version (e.g. 0.1.0). Defaults to VersionPrefix from Directory.Build.props.
 
 .PARAMETER Runtime
     .NET runtime identifier to publish. Defaults to win-x64.

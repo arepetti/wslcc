@@ -1,35 +1,55 @@
 # TODO / Deferred work
 
-Tracked, intentionally-deferred work. See [roadmap.md](roadmap.md) for the big picture.
+Intentionally deferred work. **Milestones and sequencing** live in [roadmap.md](roadmap.md); this file is the backlog detail. User-facing Compose gaps: [compatibility.md](compatibility.md).
 
-## Managed API NuGet package
+**How to use this list:** open a GitHub issue before starting non-trivial items, then put the issue number in the **Issue** column (see [CONTRIBUTING.md](../CONTRIBUTING.md#planning-and-issues)). Prefer one issue per row. Do not copy roadmap exit criteria here verbatim. Owner is the maintainer until the project has multiple committers.
 
-- Publish a managed API package (proposed: `Wslcc.Api`) that exposes WSLCC's capabilities to other .NET applications as a clean, idiomatic client library — so consumers do not have to talk to the daemon's gRPC surface directly.
-- It should wrap `Wslcc.Client` (channel + generated contracts) behind friendly async types and hide the transport (named pipe vs HTTP).
-
-## Compose engine
-
-- `config --resolve-image-digests`: pin each service image to its `repo@sha256:...` digest. Deferred because `config` runs offline/client-side and resolving digests needs registry access (would require a registry client or routing through the daemon/provider).
-- Stream per-service progress for the remaining unary RPCs (`Up`/`Down`/`Ps`/`Start`/`Stop`/`Restart`/`Pull`/`Build`) instead of returning a single batch result, so long operations report progress incrementally (as `logs` and attached `up` already do).
-- `logs --follow`: a live stream is still interleaved as lines arrive (only a bounded, non-follow dump is sorted by timestamp). Ordering a running multi-container stream would need a bounded reorder buffer / watermark delay.
-- Networks/volumes: only the common attributes are modeled (`driver`, `external`); per-network settings (`ipam`/`ipv4_address`/subnets, extra volume `driver_opts`) and an explicit resource `name:` are not.
-
-## Compose file fidelity
-
-- Multi-file merge dedups exact-duplicate sequence entries; Compose's per-resource unique-key merge for a few list attributes (e.g. long-form `ports`/`volumes` by target) is not modeled.
-- Still unsupported: `configs`/`secrets` and `deploy` settings.
-- Structured `ports`/`volumes` models instead of raw strings; only the short syntax is parsed for either.
-- `container_name`, `user`, `working_dir`, `labels`, and `entrypoint` are parsed into `ServiceSpec` but never applied to the container (see `ComposeEngine.ToRunSpec`); a service that sets any of these gets no error, just no effect. `env_file` is parsed but its files are never read into the container either.
-- `command:` written as a single string (Compose's shell-form shorthand) is passed through as one argv token instead of being shell-split/wrapped the way `docker compose` runs it — it only works for a bare, argument-less executable name. The list (exec) form is unaffected. See [compose-file.md#command-and-entrypoint](compose-file.md#command-and-entrypoint).
-
-## WSL provider
-
-- Enable the `WSLC_SDK` path and move from the `wslc.exe` fallback to the managed `Microsoft.WSL.Containers` SDK as it reaches API parity; then remove the CLI fallback.
+| Column | Meaning |
+| --- | --- |
+| Priority | **P0** blocks recommending a feature / next milestone; **P1** should land in the named milestone; **P2** later / nice-to-have |
+| Size | **S** / **M** / **L** (same scale as the roadmap) |
+| Milestone | Target from [roadmap.md](roadmap.md) |
+| Issue | GitHub issue once filed (`#N`); leave blank until work is scheduled |
 
 ## Daemon / remote
 
-- Authentication and TLS for the remote HTTP/2 endpoint (currently unauthenticated/unencrypted).
+| Item | Priority | Size | Milestone | Issue | Notes |
+| --- | --- | --- | --- | --- | --- |
+| Authentication and TLS for the remote HTTP/2 endpoint (currently unauthenticated/unencrypted) | **P0** | **L** | **0.2** | | Security; also cited from [SECURITY.md](../SECURITY.md). Until done, leave `Http.Enabled` false. |
+
+## Compose file fidelity
+
+| Item | Priority | Size | Milestone | Issue | Notes |
+| --- | --- | --- | --- | --- | --- |
+| Apply or reject `container_name`, `user`, `working_dir`, `labels`, `entrypoint`; load `env_file` into the container (today: parsed, silent no-op — see `ComposeEngine.ToRunSpec`) | **P0** | **M** | **0.2** | | Trust / security-relevant for `user` etc. |
+| Shell-form `command:` string (Compose runs via `/bin/sh -c`; we pass one argv token) | **P1** | **S** | **0.2** | | [compose-file.md#command-and-entrypoint](compose-file.md#command-and-entrypoint) |
+| Structured `ports`/`volumes` (long map form) instead of short strings only | **P2** | **M** | Later | | Long form is rejected today |
+| `configs` / `secrets` / `deploy` | **P2** | **L** | Later | | Not read |
+| Multi-file unique-key merge for list attributes (Compose long-form ports/volumes by target) | **P2** | **M** | Later | | Exact-dedup only today |
+
+## Compose engine
+
+| Item | Priority | Size | Milestone | Issue | Notes |
+| --- | --- | --- | --- | --- | --- |
+| Stream per-service progress for unary RPCs (`Up`/`Down`/`Ps`/`Start`/`Stop`/`Restart`/`Pull`/`Build`) | **P1** | **L** | **0.2** | | Prefer before GUI / public API freeze the proto |
+| `config --resolve-image-digests` | **P2** | **M** | Later | | Needs registry access; `config` is offline |
+| `logs --follow` global ordering (bounded reorder / watermark) | **P2** | **M** | Later | | Non-follow dumps already sort by timestamp |
+| Networks/volumes: IPAM, `ipv4_address`, `driver_opts`, explicit resource `name:` | **P2** | **M** | Later | | Only `driver` / `external` today |
+
+## WSL provider
+
+| Item | Priority | Size | Milestone | Issue | Notes |
+| --- | --- | --- | --- | --- | --- |
+| Enable `WSLC_SDK` and move to `Microsoft.WSL.Containers`; remove CLI fallback | **P2** | **L** | Later | | Gated on SDK API parity |
+
+## Managed API NuGet package
+
+| Item | Priority | Size | Milestone | Issue | Notes |
+| --- | --- | --- | --- | --- | --- |
+| Publish `Wslcc.Api` wrapping `Wslcc.Client` | **P2** | **M** | Later | | After gRPC surface settles (progress streaming) |
 
 ## GUI
 
-- WinUI3 app to visualize images/containers, status, metrics, and logs, talking to `wslccd` over gRPC.
+| Item | Priority | Size | Milestone | Issue | Notes |
+| --- | --- | --- | --- | --- | --- |
+| WinUI3 app over `wslccd` gRPC | **P2** | **L** | Later | | No direct provider access |

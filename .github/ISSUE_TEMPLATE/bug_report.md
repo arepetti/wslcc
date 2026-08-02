@@ -25,8 +25,11 @@ labels: bug
 - WSLCC version (`wslcc --version`):
 - Provider (`wslc` / `docker`) and its version (`wslcc version`):
 - Windows / WSL version:
-- .NET SDK version:
+- Was the shell elevated (Run as administrator)? yes / no
+- `wslcc daemon status` output (from the same shell):
+- If built from source: .NET SDK version (`dotnet --version`):
 
 ## Logs / output
 
 <!-- Paste relevant output. Run with the WSLCC_DEBUG=1 environment variable for extra detail. -->
+

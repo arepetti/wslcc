@@ -82,14 +82,47 @@ public sealed class ComposeFileParser
         service.Entrypoint = ToStringList(GetValue(map, "entrypoint"));
         service.Environment = ToKeyValues(GetValue(map, "environment"));
         service.EnvFile = ToStringList(GetValue(map, "env_file"));
-        service.Ports = ToStringList(GetValue(map, "ports"));
-        service.Volumes = ToStringList(GetValue(map, "volumes"));
+        service.Ports = ToShortSyntaxList(GetValue(map, "ports"), "ports", name);
+        service.Volumes = ToShortSyntaxList(GetValue(map, "volumes"), "volumes", name);
         service.DependsOn = ParseDependsOn(GetValue(map, "depends_on"));
         service.HealthCheck = ParseHealthCheck(GetValue(map, "healthcheck"));
         service.Networks = ToKeyList(GetValue(map, "networks"));
         service.Labels = ToNonNullKeyValues(GetValue(map, "labels"));
 
         return service;
+    }
+
+    /// <summary>
+    /// Reads a short-syntax string list (<c>ports</c>/<c>volumes</c>). A long-form map entry (or a
+    /// bare map in place of a list) is rejected rather than coerced to a useless
+    /// <see cref="object.ToString"/> value.
+    /// </summary>
+    private static IList<string> ToShortSyntaxList(object? value, string attribute, string serviceName)
+    {
+        if (AsMap(value) is not null)
+        {
+            throw new ComposeLoadException(
+                $"service '{serviceName}': '{attribute}' long map form is not supported; use short syntax (e.g. \"8080:80\" or \"./src:/app\").");
+        }
+
+        var result = new List<string>();
+        foreach (var item in AsList(value))
+        {
+            if (item is null)
+            {
+                continue;
+            }
+
+            if (AsMap(item) is not null)
+            {
+                throw new ComposeLoadException(
+                    $"service '{serviceName}': '{attribute}' long map form is not supported; use short syntax (e.g. \"8080:80\" or \"./src:/app\").");
+            }
+
+            result.Add(Convert.ToString(item) ?? string.Empty);
+        }
+
+        return result;
     }
 
     /// <summary>

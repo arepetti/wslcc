@@ -496,9 +496,9 @@ public sealed class ComposeEngine : IComposeEngine
         {
             cancellationToken.ThrowIfCancellationRequested();
 
+            // Build-only services have nothing to pull (matching `docker compose pull` and `BuildAsync`).
             if (string.IsNullOrWhiteSpace(service.Image))
             {
-                results.Add(new ServiceOperationResult(service.Name, "failed", Error: "no 'image' specified"));
                 continue;
             }
 

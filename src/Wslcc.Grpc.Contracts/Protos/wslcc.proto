@@ -155,7 +155,7 @@ message StopRequest {
   string default_project_name = 2;
   string compose_yaml = 3;
   string provider = 4;
-  // Optional service names to stop; empty means "every running service".
+  // Optional service names to stop; empty means "every service with an existing container".
   repeated string services = 5;
 }
 

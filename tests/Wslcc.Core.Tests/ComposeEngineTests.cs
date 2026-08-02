@@ -977,20 +977,25 @@ public sealed class ComposeEngineTests
     }
 
     [Fact]
-    public async Task Pull_reports_failure_for_missing_image_and_provider_errors()
+    public async Task Pull_reports_failure_for_provider_errors_and_skips_build_only_services()
     {
         var provider = new FakeProvider("docker", true);
         provider.FailImage = "redis:7";
         var engine = new ComposeEngine(new[] { provider });
         var file = TwoServiceFile();
-        file.Services["nolimage"] = new ServiceSpec { Name = "nolimage" };
+        file.Services["nolimage"] = new ServiceSpec
+        {
+            Name = "nolimage",
+            Build = new BuildSpec { Context = "./nolimage" },
+        };
 
         var results = await engine.PullAsync(file, providerName: null, services: null);
 
-        Assert.Equal(3, results.Count);
+        Assert.Equal(2, results.Count);
         Assert.Contains(results, r => r.Service == "web" && r.Status == "pulled");
         Assert.Contains(results, r => r.Service == "redis" && r.Status == "failed" && r.Error!.Contains("redis:7"));
-        Assert.Contains(results, r => r.Service == "nolimage" && r.Status == "failed");
+        Assert.DoesNotContain(results, r => r.Service == "nolimage");
+        Assert.DoesNotContain(provider.EnsuredImages, i => i.Image == string.Empty || i.Image is null);
     }
 
     [Fact]

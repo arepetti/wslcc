@@ -140,4 +140,42 @@ public sealed class ComposeFileParserTests
 
         Assert.True(file.Services["web"].HealthCheck!.Disabled);
     }
+
+    [Fact]
+    public void Rejects_long_form_ports()
+    {
+        const string yaml = """
+            services:
+              web:
+                image: nginx
+                ports:
+                  - target: 80
+                    published: 8080
+            """;
+
+        var ex = Assert.Throws<ComposeLoadException>(() => _parser.Parse(yaml));
+
+        Assert.Contains("ports", ex.Message);
+        Assert.Contains("long map form", ex.Message);
+        Assert.Contains("web", ex.Message);
+    }
+
+    [Fact]
+    public void Rejects_long_form_volumes()
+    {
+        const string yaml = """
+            services:
+              web:
+                image: nginx
+                volumes:
+                  - type: bind
+                    source: ./data
+                    target: /data
+            """;
+
+        var ex = Assert.Throws<ComposeLoadException>(() => _parser.Parse(yaml));
+
+        Assert.Contains("volumes", ex.Message);
+        Assert.Contains("long map form", ex.Message);
+    }
 }

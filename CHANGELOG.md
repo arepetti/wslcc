@@ -2,10 +2,12 @@
 
 All notable changes to this project are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.1] - 2026-07-26
+No version has been tagged or published yet; everything below is under development on `main`.
+
+## [Unreleased]
 
 ### Added
-- Provider-agnostic engine with providers for WSL containers (`wslc`) and Docker Compose (`docker`).
+- Provider-agnostic engine with providers for WSL containers (`wslc`) and Docker (`docker`).
 - `wslccd` daemon: gRPC over a named pipe (optional HTTP), runs as a per-user process (on demand or auto-started at logon).
 - `compose` commands mirroring `docker compose`:
   - `up` (attached by default — streams logs and gracefully stops on Ctrl+C — or `-d`/`--detach`; auto-builds `build:` services when their image is missing, with `--build`/`--no-build`/`--pull`), `down`, `ps`.
@@ -19,3 +21,8 @@ All notable changes to this project are documented here. The format is based on 
 - Daemon commands: `daemon start`/`stop`/`status`, `daemon install`/`uninstall` (per-user autostart at logon, no elevation), and top-level `version`.
 - Options: `--no-color` (and `NO_COLOR`) on every command; `compose` commands use `--wslcc-host`/`--wslcc-provider`, while `version`/`daemon` commands use `-H`/`--host` (plus `--provider` on `daemon start`/`install` to set the daemon's default).
 - Targets `net10.0`.
+- Documentation: [docs/troubleshooting.md](docs/troubleshooting.md), [docs/compatibility.md](docs/compatibility.md), [docs/README.md](docs/README.md), roadmap milestones.
+
+### Fixed
+- `compose pull` skips build-only services (no `image:`) instead of reporting them as failed.
+- Long-form `ports:` / `volumes:` map entries are rejected with a clear error instead of being coerced into a garbage runtime argument.

@@ -9,8 +9,8 @@ using Wslcc.Providers.Wslc;
 using Wslccd;
 
 // Pin the content root to the executable's folder so appsettings.json (the 'Wslcc' section) loads no
-// matter the launcher's working directory: 'wslcc daemon start', the 'daemon install' logon task, and a
-// manual service all start wslccd with different current directories.
+// matter the launcher's working directory: 'wslcc daemon start', the 'daemon install' HKCU Run
+// autostart, and a manual service all start wslccd with different current directories.
 var builder = WebApplication.CreateBuilder(new WebApplicationOptions
 {
     Args = args,
