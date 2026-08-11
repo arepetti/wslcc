@@ -32,7 +32,7 @@ Each entry under `services:` accepts the keys below. **Applied** means the key c
 | --- | --- | --- | --- |
 | `image` | string | ✅ | Used as-is. Not required if `build:` is present (see [`up` auto-build](cli-mapping.md#wslcc-compose-up)). |
 | `build` | string, or map (`context`, `dockerfile`, `target`, `args`) | ✅ | See [Build](#build). |
-| `command` | list, or a single string | ✅ (list); ⚠️ (string) | See [Command and entrypoint](#command-and-entrypoint) — the string short form is **not** shell-split. |
+| `command` | list, or a single string | ✅ | See [Command and entrypoint](#command-and-entrypoint) — list is exec form; string is shell form (`/bin/sh -c`). |
 | `entrypoint` | list, or a single string | ❌ parsed only | Recognized but never overrides the image's entrypoint. |
 | `environment` | map, or list of `KEY=VALUE` / bare `KEY` | ✅ | See [Environment](#environment). |
 | `env_file` | string, or list of strings | ❌ parsed only | Recognized but its files are never read into the container. Put the same variables under `environment:` instead, or use `--env-file`/`.env` for *interpolation* (a different thing — see [Resolution features](#resolution-features)). |
@@ -75,12 +75,12 @@ services:
   worker:
     command: ["npm", "run", "worker"]   # exec form — each element becomes one argv token
   legacy:
-    command: npm start                  # string short form — see caveat below
+    command: npm start                  # shell form — run as /bin/sh -c "npm start"
 ```
 
 The **list form** is applied token-by-token, exactly like Compose's exec form.
 
-The **string short form** is *not* split into words or wrapped in a shell the way `docker compose` does (Compose runs a string `command:` as `/bin/sh -c "<string>"`). WSLCC instead passes the whole string as a single argv element, which almost always fails for anything with arguments (the runtime tries to exec a binary literally named `npm start`, space included). Use the list form for any command that takes arguments; the string form only works for a bare, argument-less executable name.
+The **string short form** matches Compose: it is run as `/bin/sh -c "<string>"` (not word-split into argv). Prefer the list form when you want exec semantics without a shell.
 
 `entrypoint:` is parsed (both forms) but never applied — see the table above.
 

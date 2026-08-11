@@ -142,6 +142,53 @@ public sealed class ComposeFileParserTests
     }
 
     [Fact]
+    public void String_command_expands_to_shell_form()
+    {
+        const string yaml = """
+            services:
+              web:
+                image: busybox
+                command: npm start
+            """;
+
+        var file = _parser.Parse(yaml);
+
+        Assert.Equal(new[] { "/bin/sh", "-c", "npm start" }, file.Services["web"].Command);
+    }
+
+    [Fact]
+    public void List_command_is_exec_form()
+    {
+        const string yaml = """
+            services:
+              web:
+                image: busybox
+                command: ["npm", "start"]
+            """;
+
+        var file = _parser.Parse(yaml);
+
+        Assert.Equal(new[] { "npm", "start" }, file.Services["web"].Command);
+    }
+
+    [Fact]
+    public void Rejects_map_command()
+    {
+        const string yaml = """
+            services:
+              web:
+                image: busybox
+                command:
+                  foo: bar
+            """;
+
+        var ex = Assert.Throws<ComposeLoadException>(() => _parser.Parse(yaml));
+
+        Assert.Contains("command", ex.Message);
+        Assert.Contains("web", ex.Message);
+    }
+
+    [Fact]
     public void Rejects_long_form_ports()
     {
         const string yaml = """

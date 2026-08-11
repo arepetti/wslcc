@@ -77,7 +77,7 @@ Full table: [compose-file.md#service-reference](compose-file.md#service-referenc
 
 | Key / form | Compose | WSLCC |
 | --- | --- | --- |
-| `command: "npm start"` (string) | Shell form: `/bin/sh -c "…"` | **Single argv token** — almost always wrong if the string has spaces. Use list form: `["npm", "start"]`. |
+| `command: "npm start"` (string) | Shell form: `/bin/sh -c "…"` | Same shell form (`/bin/sh -c`). List form remains exec (no shell). |
 | `environment: [FOO]` / bare `FOO:` | Inherit from the **client** shell / project env | Passed as `-e FOO` to the runtime → inherits from **`wslccd`’s** process environment, not your shell |
 | `ports` / `volumes` long map form | Supported | **Rejected** with an error (short syntax only) |
 | `networks:` map values (`aliases`, `ipv4_address`, …) | Applied | Only membership (keys) applied; map values ignored |
@@ -131,8 +131,8 @@ Details and tracking: [compose-file.md#resolution-features](compose-file.md#reso
    wslcc compose config
    wslcc compose config --hash "*"
    ```
-4. Search your compose files for: string `command:`, `env_file:`, `container_name:`, `user:`, `working_dir:`, `entrypoint:`, service `labels:`, long-form `ports`/`volumes`, `configs`/`secrets`/`deploy`, `privileged` / `cap_*` / `read_only`, and bare `environment` keys you expect from your shell.
-5. Rewrite string commands to lists; fold `env_file` into `environment`; pass `-f` for overrides explicitly; use `--project-directory` if you invoke from another cwd.
+4. Search your compose files for: `env_file:`, `container_name:`, `user:`, `working_dir:`, `entrypoint:`, service `labels:`, long-form `ports`/`volumes`, `configs`/`secrets`/`deploy`, `privileged` / `cap_*` / `read_only`, and bare `environment` keys you expect from your shell.
+5. Fold `env_file` into `environment`; pass `-f` for overrides explicitly; use `--project-directory` if you invoke from another cwd.
 6. Bring the stack up under WSLCC (`up -d`), verify with `wslcc compose ps` — not `docker compose ps`.
 7. Tear down with `wslcc compose down` (add `-v` only if you intend to delete named volumes).
 

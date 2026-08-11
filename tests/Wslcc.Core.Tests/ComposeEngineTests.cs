@@ -276,6 +276,25 @@ public sealed class ComposeEngineTests
     }
 
     [Fact]
+    public async Task Up_passes_shell_form_command_argv_through_to_the_provider()
+    {
+        var provider = new FakeProvider("docker", true);
+        var engine = new ComposeEngine(new[] { provider });
+        var file = new ComposeFile();
+        file.Services["web"] = new ServiceSpec
+        {
+            Name = "web",
+            Image = "busybox",
+            Command = { "/bin/sh", "-c", "npm start" },
+        };
+
+        await engine.UpAsync("proj", file, providerName: null, pull: false, buildPolicy: BuildPolicy.Never, baseDirectory: null);
+
+        var web = Assert.Single(provider.RunSpecs);
+        Assert.Equal(new[] { "/bin/sh", "-c", "npm start" }, web.Command);
+    }
+
+    [Fact]
     public async Task Up_reports_failure_when_image_missing()
     {
         var provider = new FakeProvider("docker", true);

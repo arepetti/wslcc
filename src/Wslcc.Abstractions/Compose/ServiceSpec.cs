@@ -14,6 +14,10 @@ public sealed class ServiceSpec
 
     public string? ContainerName { get; set; }
 
+    /// <summary>
+    /// Container argv override. A Compose string <c>command:</c> is expanded by the parser into
+    /// <c>/bin/sh</c>, <c>-c</c>, and the original string (shell form); a list is kept as exec-form tokens.
+    /// </summary>
     public IList<string> Command { get; set; } = new List<string>();
 
     public IList<string> Entrypoint { get; set; } = new List<string>();

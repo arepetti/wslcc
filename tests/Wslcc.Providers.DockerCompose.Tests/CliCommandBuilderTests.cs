@@ -35,6 +35,19 @@ public sealed class CliCommandBuilderTests
     }
 
     [Fact]
+    public void BuildRunArguments_appends_shell_form_command_after_image()
+    {
+        var spec = new ContainerRunSpec { Image = "busybox", Name = "proj-svc" };
+        spec.Command.Add("/bin/sh");
+        spec.Command.Add("-c");
+        spec.Command.Add("npm start");
+
+        var args = CliCommandBuilder.BuildRunArguments(spec);
+
+        Assert.EndsWith("busybox /bin/sh -c \"npm start\"", args);
+    }
+
+    [Fact]
     public void BuildRunArguments_throws_when_no_image()
     {
         var spec = new ContainerRunSpec { Name = "x" };

@@ -78,7 +78,7 @@ public sealed class ComposeFileParser
         service.User = GetString(map, "user");
 
         service.Build = ParseBuild(GetValue(map, "build"));
-        service.Command = ToStringList(GetValue(map, "command"));
+        service.Command = ToCommandList(GetValue(map, "command"), name);
         service.Entrypoint = ToStringList(GetValue(map, "entrypoint"));
         service.Environment = ToKeyValues(GetValue(map, "environment"));
         service.EnvFile = ToStringList(GetValue(map, "env_file"));
@@ -90,6 +90,48 @@ public sealed class ComposeFileParser
         service.Labels = ToNonNullKeyValues(GetValue(map, "labels"));
 
         return service;
+    }
+
+    /// <summary>
+    /// Reads <c>command:</c> in Compose exec form (YAML list → argv tokens) or shell form (YAML
+    /// scalar → <c>/bin/sh -c "&lt;string&gt;"</c>). A map value is rejected.
+    /// </summary>
+    private static IList<string> ToCommandList(object? value, string serviceName)
+    {
+        if (value is null)
+        {
+            return new List<string>();
+        }
+
+        if (AsMap(value) is not null)
+        {
+            throw new ComposeLoadException(
+                $"service '{serviceName}': 'command' must be a string or a list of strings.");
+        }
+
+        // Scalars (including non-string YAML scalars) are Compose shell form.
+        if (value is string s)
+        {
+            return new List<string> { "/bin/sh", "-c", s };
+        }
+
+        if (value is System.Collections.IEnumerable enumerable)
+        {
+            var tokens = new List<string>();
+            foreach (var item in enumerable)
+            {
+                if (item is null)
+                {
+                    continue;
+                }
+
+                tokens.Add(Convert.ToString(item) ?? string.Empty);
+            }
+
+            return tokens;
+        }
+
+        return new List<string> { "/bin/sh", "-c", Convert.ToString(value) ?? string.Empty };
     }
 
     /// <summary>

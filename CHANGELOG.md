@@ -7,6 +7,7 @@ No version has been tagged or published yet; everything below is under developme
 ## [Unreleased]
 
 ### Added
+
 - Provider-agnostic engine with providers for WSL containers (`wslc`) and Docker (`docker`).
 - `wslccd` daemon: gRPC over a named pipe (optional HTTP), runs as a per-user process (on demand or auto-started at logon).
 - `compose` commands mirroring `docker compose`:
@@ -26,3 +27,5 @@ No version has been tagged or published yet; everything below is under developme
 ### Fixed
 - `compose pull` skips build-only services (no `image:`) instead of reporting them as failed.
 - Long-form `ports:` / `volumes:` map entries are rejected with a clear error instead of being coerced into a garbage runtime argument.
+- String `command:` uses Compose shell form (`/bin/sh -c "…"`) instead of a single argv token.
+

@@ -22,7 +22,6 @@ Intentionally deferred work. **Milestones and sequencing** live in [roadmap.md](
 | Item | Priority | Size | Milestone | Issue | Notes |
 | --- | --- | --- | --- | --- | --- |
 | Apply or reject `container_name`, `user`, `working_dir`, `labels`, `entrypoint`; load `env_file` into the container (today: parsed, silent no-op — see `ComposeEngine.ToRunSpec`) | **P0** | **M** | **0.2** | | Trust / security-relevant for `user` etc. |
-| Shell-form `command:` string (Compose runs via `/bin/sh -c`; we pass one argv token) | **P1** | **S** | **0.2** | | [compose-file.md#command-and-entrypoint](compose-file.md#command-and-entrypoint) |
 | Structured `ports`/`volumes` (long map form) instead of short strings only | **P2** | **M** | Later | | Long form is rejected today |
 | `configs` / `secrets` / `deploy` | **P2** | **L** | Later | | Not read |
 | Multi-file unique-key merge for list attributes (Compose long-form ports/volumes by target) | **P2** | **M** | Later | | Exact-dedup only today |
