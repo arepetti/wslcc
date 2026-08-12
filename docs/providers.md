@@ -16,6 +16,8 @@ Select a provider per compose command with `--wslcc-provider <name>`; otherwise 
 
 If `wslc` is not installed, the provider reports `IsAvailable = false` with guidance (`wsl --update --pre-release`) rather than throwing.
 
+The CLI client passes the same `run` flags as Docker for the fields WSLCC applies (`-u`, `-w`, `--entrypoint`, `--label`, `--env-file`, `--name`, …). Preview `wslc` builds may still reject some Docker-only flags (notably `--restart`); prefer the `docker` provider when you need restart policies.
+
 ## `docker` — Docker CLI
 
 `Wslcc.Providers.DockerCompose` shells out to the plain `docker` CLI for container lifecycle (`run`, `ps`, `stop`, …). Orchestration (dependency order, change detection, networks/volumes) lives in WSLCC's own `ComposeEngine`, not in Docker Compose. The provider uses `docker compose version --short` only to report a version string in `wslcc version` / `compose version`. Containers are labelled `wslcc.project` / `wslcc.service`, so they are **not** visible to `docker compose ps` (and existing Compose projects are not visible to `wslcc compose ps`). See [compatibility.md](compatibility.md) for the full Compose migration picture. If `docker` is not found, the provider reports `IsAvailable = false`.

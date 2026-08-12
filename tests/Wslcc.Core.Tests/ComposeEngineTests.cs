@@ -295,6 +295,108 @@ public sealed class ComposeEngineTests
     }
 
     [Fact]
+    public async Task Up_applies_container_name_user_workdir_labels_entrypoint_and_env_file()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "wslcc-envfile-" + Guid.NewGuid().ToString("n"));
+        Directory.CreateDirectory(dir);
+        var envPath = Path.Combine(dir, "app.env");
+        await File.WriteAllTextAsync(envPath, "FROM_FILE=1\n");
+
+        try
+        {
+            var provider = new FakeProvider("docker", true);
+            var engine = new ComposeEngine(new[] { provider });
+            var file = new ComposeFile();
+            file.Services["web"] = new ServiceSpec
+            {
+                Name = "web",
+                Image = "busybox",
+                ContainerName = "custom-web",
+                User = "1000:1000",
+                WorkingDir = "/app",
+                Entrypoint = { "/bin/sh", "-c", "echo hi" },
+                EnvFile = { new EnvFileSpec { Path = "app.env" } },
+            };
+            file.Services["web"].Labels["com.example.team"] = "platform";
+            file.Services["web"].Environment["NODE_ENV"] = "production";
+
+            await engine.UpAsync("proj", file, providerName: null, pull: false, buildPolicy: BuildPolicy.Never, baseDirectory: dir);
+
+            var web = Assert.Single(provider.RunSpecs);
+            Assert.Equal("custom-web", web.Name);
+            Assert.Equal("1000:1000", web.User);
+            Assert.Equal("/app", web.WorkingDir);
+            Assert.Equal("platform", web.Labels["com.example.team"]);
+            Assert.Equal("proj", web.Labels[WslccLabels.Project]);
+            Assert.Equal("web", web.Labels[WslccLabels.Service]);
+            Assert.Equal(new[] { "/bin/sh", "-c", "echo hi" }, web.Entrypoint);
+            Assert.Equal(Path.GetFullPath(envPath), Assert.Single(web.EnvFiles));
+            Assert.Equal("production", web.Environment["NODE_ENV"]);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Up_skips_optional_missing_env_file_and_fails_required_missing()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "wslcc-envfile-" + Guid.NewGuid().ToString("n"));
+        Directory.CreateDirectory(dir);
+
+        try
+        {
+            var provider = new FakeProvider("docker", true);
+            var engine = new ComposeEngine(new[] { provider });
+
+            var optional = new ComposeFile();
+            optional.Services["web"] = new ServiceSpec
+            {
+                Name = "web",
+                Image = "busybox",
+                EnvFile = { new EnvFileSpec { Path = "missing.env", Required = false } },
+            };
+
+            await engine.UpAsync("proj", optional, providerName: null, pull: false, buildPolicy: BuildPolicy.Never, baseDirectory: dir);
+            Assert.Empty(Assert.Single(provider.RunSpecs).EnvFiles);
+
+            var required = new ComposeFile();
+            required.Services["web"] = new ServiceSpec
+            {
+                Name = "web",
+                Image = "busybox",
+                EnvFile = { new EnvFileSpec { Path = "missing.env", Required = true } },
+            };
+
+            var results = await engine.UpAsync("proj", required, providerName: null, pull: false, buildPolicy: BuildPolicy.Never, baseDirectory: dir);
+            var failed = Assert.Single(results);
+            Assert.Equal("failed", failed.Status);
+            Assert.Contains("env_file not found", failed.Error);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Up_rejects_duplicate_container_names()
+    {
+        var provider = new FakeProvider("docker", true);
+        var engine = new ComposeEngine(new[] { provider });
+        var file = new ComposeFile();
+        file.Services["a"] = new ServiceSpec { Name = "a", Image = "busybox", ContainerName = "same" };
+        file.Services["b"] = new ServiceSpec { Name = "b", Image = "busybox", ContainerName = "same" };
+
+        var ex = await Assert.ThrowsAsync<ProviderException>(() =>
+            engine.UpAsync("proj", file, providerName: null, pull: false, buildPolicy: BuildPolicy.Never, baseDirectory: null));
+
+        Assert.Contains("container name", ex.Message);
+        Assert.Empty(provider.RunSpecs);
+    }
+
+    [Fact]
     public async Task Up_reports_failure_when_image_missing()
     {
         var provider = new FakeProvider("docker", true);

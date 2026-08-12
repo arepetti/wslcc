@@ -78,10 +78,10 @@ public sealed class ComposeFileParser
         service.User = GetString(map, "user");
 
         service.Build = ParseBuild(GetValue(map, "build"));
-        service.Command = ToCommandList(GetValue(map, "command"), name);
-        service.Entrypoint = ToStringList(GetValue(map, "entrypoint"));
+        service.Command = ToShellOrExecList(GetValue(map, "command"), "command", name);
+        service.Entrypoint = ToShellOrExecList(GetValue(map, "entrypoint"), "entrypoint", name);
         service.Environment = ToKeyValues(GetValue(map, "environment"));
-        service.EnvFile = ToStringList(GetValue(map, "env_file"));
+        service.EnvFile = ParseEnvFiles(GetValue(map, "env_file"), name);
         service.Ports = ToShortSyntaxList(GetValue(map, "ports"), "ports", name);
         service.Volumes = ToShortSyntaxList(GetValue(map, "volumes"), "volumes", name);
         service.DependsOn = ParseDependsOn(GetValue(map, "depends_on"));
@@ -93,10 +93,10 @@ public sealed class ComposeFileParser
     }
 
     /// <summary>
-    /// Reads <c>command:</c> in Compose exec form (YAML list → argv tokens) or shell form (YAML
-    /// scalar → <c>/bin/sh -c "&lt;string&gt;"</c>). A map value is rejected.
+    /// Reads <c>command:</c> / <c>entrypoint:</c> in Compose exec form (YAML list → argv tokens) or
+    /// shell form (YAML scalar → <c>/bin/sh -c "&lt;string&gt;"</c>). A map value is rejected.
     /// </summary>
-    private static IList<string> ToCommandList(object? value, string serviceName)
+    private static IList<string> ToShellOrExecList(object? value, string attribute, string serviceName)
     {
         if (value is null)
         {
@@ -106,7 +106,7 @@ public sealed class ComposeFileParser
         if (AsMap(value) is not null)
         {
             throw new ComposeLoadException(
-                $"service '{serviceName}': 'command' must be a string or a list of strings.");
+                $"service '{serviceName}': '{attribute}' must be a string or a list of strings.");
         }
 
         // Scalars (including non-string YAML scalars) are Compose shell form.
@@ -132,6 +132,66 @@ public sealed class ComposeFileParser
         }
 
         return new List<string> { "/bin/sh", "-c", Convert.ToString(value) ?? string.Empty };
+    }
+
+    /// <summary>
+    /// Reads <c>env_file:</c> as a string, a list of strings, or a list of
+    /// <c>{ path, required }</c> maps.
+    /// </summary>
+    private static IList<EnvFileSpec> ParseEnvFiles(object? value, string serviceName)
+    {
+        if (value is null)
+        {
+            return new List<EnvFileSpec>();
+        }
+
+        if (value is string path)
+        {
+            return new List<EnvFileSpec> { new() { Path = path } };
+        }
+
+        if (AsMap(value) is not null)
+        {
+            throw new ComposeLoadException(
+                $"service '{serviceName}': 'env_file' must be a string or a list (got a map).");
+        }
+
+        var result = new List<EnvFileSpec>();
+        foreach (var item in AsList(value))
+        {
+            if (item is null)
+            {
+                continue;
+            }
+
+            if (item is string s)
+            {
+                result.Add(new EnvFileSpec { Path = s });
+                continue;
+            }
+
+            if (AsMap(item) is { } map)
+            {
+                var entryPath = GetString(map, "path");
+                if (string.IsNullOrWhiteSpace(entryPath))
+                {
+                    throw new ComposeLoadException(
+                        $"service '{serviceName}': 'env_file' map entry requires a 'path'.");
+                }
+
+                result.Add(new EnvFileSpec
+                {
+                    Path = entryPath,
+                    Required = GetBool(map, "required", defaultValue: true),
+                });
+                continue;
+            }
+
+            throw new ComposeLoadException(
+                $"service '{serviceName}': 'env_file' entries must be strings or {{ path, required }} maps.");
+        }
+
+        return result;
     }
 
     /// <summary>

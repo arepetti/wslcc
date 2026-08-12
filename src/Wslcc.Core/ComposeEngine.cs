@@ -42,6 +42,7 @@ public sealed class ComposeEngine : IComposeEngine
         CancellationToken cancellationToken = default)
     {
         var provider = ResolveProvider(providerName);
+        EnsureUniqueContainerNames(projectName, file);
         var results = new List<ServiceOperationResult>();
         var startedContainers = new Dictionary<string, string>(StringComparer.Ordinal);
         var failed = new HashSet<string>(StringComparer.Ordinal);
@@ -93,7 +94,7 @@ public sealed class ComposeEngine : IComposeEngine
                 var image = await PrepareServiceImageAsync(provider, projectName, service, baseDirectory, pull, buildPolicy, cancellationToken)
                     .ConfigureAwait(false);
 
-                var spec = ToRunSpec(projectName, service, image);
+                var spec = ToRunSpec(projectName, service, image, baseDirectory);
                 if (configHash is { Length: > 0 })
                 {
                     spec.Labels[WslccLabels.ConfigHash] = configHash;
@@ -188,7 +189,7 @@ public sealed class ComposeEngine : IComposeEngine
 
             var container = startedContainers.TryGetValue(dependency.Name, out var name)
                 ? name
-                : WslccLabels.ContainerName(projectName, dependency.Name);
+                : ResolveContainerName(projectName, dependencyService);
 
             var hasHealthCheck = dependencyService.HealthCheck is { Disabled: false };
 
@@ -1037,19 +1038,81 @@ public sealed class ComposeEngine : IComposeEngine
         }
     }
 
-    private static ContainerRunSpec ToRunSpec(string projectName, ServiceSpec service, string image)
+    /// <summary>
+    /// Container name for a service: explicit <c>container_name:</c> when set, otherwise
+    /// <c>&lt;project&gt;-&lt;service&gt;</c>.
+    /// </summary>
+    private static string ResolveContainerName(string projectName, ServiceSpec service)
+        => string.IsNullOrWhiteSpace(service.ContainerName)
+            ? WslccLabels.ContainerName(projectName, service.Name)
+            : service.ContainerName!;
+
+    /// <summary>
+    /// Compose forbids two services sharing a <c>container_name</c> (or resolving to the same default name).
+    /// </summary>
+    private static void EnsureUniqueContainerNames(string projectName, ComposeFile file)
+    {
+        var owners = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var service in file.Services.Values)
+        {
+            var name = ResolveContainerName(projectName, service);
+            if (owners.TryGetValue(name, out var other))
+            {
+                throw new ProviderException(
+                    $"services '{other}' and '{service.Name}' both use container name '{name}'.");
+            }
+
+            owners[name] = service.Name;
+        }
+    }
+
+    private static ContainerRunSpec ToRunSpec(
+        string projectName,
+        ServiceSpec service,
+        string image,
+        string? baseDirectory)
     {
         var spec = new ContainerRunSpec
         {
             Image = image,
-            Name = WslccLabels.ContainerName(projectName, service.Name),
+            Name = ResolveContainerName(projectName, service),
+            User = service.User,
+            WorkingDir = service.WorkingDir,
             Restart = service.Restart,
             HealthCheck = BuildContainerHealthCheck(service.HealthCheck),
             Detach = true,
         };
 
+        // Service labels first; WSLCC's own labels win so project/service/hash discovery stays reliable.
+        foreach (var label in service.Labels)
+        {
+            spec.Labels[label.Key] = label.Value;
+        }
+
         spec.Labels[WslccLabels.Project] = projectName;
         spec.Labels[WslccLabels.Service] = service.Name;
+
+        foreach (var envFile in service.EnvFile)
+        {
+            if (string.IsNullOrWhiteSpace(envFile.Path))
+            {
+                continue;
+            }
+
+            var path = ResolveHostPath(envFile.Path, baseDirectory);
+            if (!File.Exists(path))
+            {
+                if (envFile.Required)
+                {
+                    throw new ProviderException(
+                        $"service '{service.Name}': env_file not found: {path}");
+                }
+
+                continue;
+            }
+
+            spec.EnvFiles.Add(path);
+        }
 
         foreach (var env in service.Environment)
         {
@@ -1061,12 +1124,31 @@ public sealed class ComposeEngine : IComposeEngine
             spec.Ports.Add(port);
         }
 
+        foreach (var token in service.Entrypoint)
+        {
+            spec.Entrypoint.Add(token);
+        }
+
         foreach (var token in service.Command)
         {
             spec.Command.Add(token);
         }
 
         return spec;
+    }
+
+    /// <summary>
+    /// Resolves a host path against <paramref name="baseDirectory"/> when relative. Absolute paths
+    /// (and paths with no base) are returned as-is.
+    /// </summary>
+    private static string ResolveHostPath(string path, string? baseDirectory)
+    {
+        if (Path.IsPathRooted(path) || string.IsNullOrWhiteSpace(baseDirectory))
+        {
+            return path;
+        }
+
+        return Path.GetFullPath(Path.Combine(baseDirectory, path));
     }
 
     /// <summary>

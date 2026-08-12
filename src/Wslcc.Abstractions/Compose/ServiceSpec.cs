@@ -20,11 +20,16 @@ public sealed class ServiceSpec
     /// </summary>
     public IList<string> Command { get; set; } = new List<string>();
 
+    /// <summary>
+    /// Image entrypoint override. A Compose string <c>entrypoint:</c> is expanded by the parser into
+    /// shell form (<c>/bin/sh -c</c>); a list is kept as exec-form tokens.
+    /// </summary>
     public IList<string> Entrypoint { get; set; } = new List<string>();
 
     public IDictionary<string, string?> Environment { get; set; } = new Dictionary<string, string?>(StringComparer.Ordinal);
 
-    public IList<string> EnvFile { get; set; } = new List<string>();
+    /// <summary>Files whose variables are loaded into the container (before <see cref="Environment"/> overrides).</summary>
+    public IList<EnvFileSpec> EnvFile { get; set; } = new List<EnvFileSpec>();
 
     public IList<string> Ports { get; set; } = new List<string>();
 

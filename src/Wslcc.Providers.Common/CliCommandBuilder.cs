@@ -56,6 +56,13 @@ public static class CliCommandBuilder
             }
         }
 
+        // env_file before -e so environment: keys override file contents (Compose / docker run order).
+        foreach (var envFile in spec.EnvFiles)
+        {
+            args.Add("--env-file");
+            args.Add(envFile);
+        }
+
         foreach (var env in spec.Environment)
         {
             args.Add("-e");
@@ -74,6 +81,24 @@ public static class CliCommandBuilder
             args.Add(volume);
         }
 
+        if (!string.IsNullOrWhiteSpace(spec.User))
+        {
+            args.Add("-u");
+            args.Add(spec.User!);
+        }
+
+        if (!string.IsNullOrWhiteSpace(spec.WorkingDir))
+        {
+            args.Add("-w");
+            args.Add(spec.WorkingDir!);
+        }
+
+        if (spec.Entrypoint.Count > 0)
+        {
+            args.Add("--entrypoint");
+            args.Add(spec.Entrypoint[0]);
+        }
+
         if (!string.IsNullOrWhiteSpace(spec.Restart))
         {
             args.Add("--restart");
@@ -83,6 +108,12 @@ public static class CliCommandBuilder
         AppendHealthCheck(args, spec.HealthCheck);
 
         args.Add(spec.Image);
+
+        // Remaining entrypoint tokens become CMD ahead of command: (same final argv as a multi-arg ENTRYPOINT).
+        for (var i = 1; i < spec.Entrypoint.Count; i++)
+        {
+            args.Add(spec.Entrypoint[i]);
+        }
 
         foreach (var token in spec.Command)
         {

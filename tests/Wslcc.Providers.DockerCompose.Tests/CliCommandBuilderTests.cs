@@ -48,6 +48,39 @@ public sealed class CliCommandBuilderTests
     }
 
     [Fact]
+    public void BuildRunArguments_includes_user_workdir_entrypoint_env_file_and_labels()
+    {
+        var spec = new ContainerRunSpec
+        {
+            Image = "busybox",
+            Name = "custom-name",
+            User = "1000:1000",
+            WorkingDir = "/app",
+        };
+        spec.Labels["com.example.team"] = "platform";
+        spec.Labels["wslcc.project"] = "proj";
+        spec.EnvFiles.Add(@"C:\proj\a.env");
+        spec.Environment["NODE_ENV"] = "production";
+        spec.Entrypoint.Add("/bin/sh");
+        spec.Entrypoint.Add("-c");
+        spec.Entrypoint.Add("echo hi");
+        spec.Command.Add("extra");
+
+        var args = CliCommandBuilder.BuildRunArguments(spec);
+
+        Assert.Contains("--name custom-name", args);
+        Assert.Contains("--label com.example.team=platform", args);
+        Assert.Contains("--label wslcc.project=proj", args);
+        Assert.Contains("--env-file", args);
+        Assert.Contains("-e NODE_ENV=production", args);
+        Assert.Contains("-u 1000:1000", args);
+        Assert.Contains("-w /app", args);
+        Assert.Contains("--entrypoint /bin/sh", args);
+        Assert.EndsWith("busybox -c \"echo hi\" extra", args);
+        Assert.True(args.IndexOf("--env-file", StringComparison.Ordinal) < args.IndexOf("-e NODE_ENV", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void BuildRunArguments_throws_when_no_image()
     {
         var spec = new ContainerRunSpec { Name = "x" };

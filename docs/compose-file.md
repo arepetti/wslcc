@@ -33,19 +33,19 @@ Each entry under `services:` accepts the keys below. **Applied** means the key c
 | `image` | string | ✅ | Used as-is. Not required if `build:` is present (see [`up` auto-build](cli-mapping.md#wslcc-compose-up)). |
 | `build` | string, or map (`context`, `dockerfile`, `target`, `args`) | ✅ | See [Build](#build). |
 | `command` | list, or a single string | ✅ | See [Command and entrypoint](#command-and-entrypoint) — list is exec form; string is shell form (`/bin/sh -c`). |
-| `entrypoint` | list, or a single string | ❌ parsed only | Recognized but never overrides the image's entrypoint. |
-| `environment` | map, or list of `KEY=VALUE` / bare `KEY` | ✅ | See [Environment](#environment). |
-| `env_file` | string, or list of strings | ❌ parsed only | Recognized but its files are never read into the container. Put the same variables under `environment:` instead, or use `--env-file`/`.env` for *interpolation* (a different thing — see [Resolution features](#resolution-features)). |
+| `entrypoint` | list, or a single string | ✅ | Same shell/exec rules as `command:`. Passed as `--entrypoint` (plus trailing tokens after the image). |
+| `environment` | map, or list of `KEY=VALUE` / bare `KEY` | ✅ | See [Environment](#environment). Overrides `env_file:`. |
+| `env_file` | string, list of strings, or list of `{ path, required }` | ✅ | Loaded into the container via `--env-file` (paths relative to the project / `--project-directory`). Missing files fail unless `required: false`. Distinct from CLI `--env-file` / `.env` *interpolation* — see [Resolution features](#resolution-features). |
 | `ports` | list of `"[HOST:]CONTAINER[/PROTO]"` | ✅ | Short syntax only. Passed through to the runtime unchanged. The long map form (`target:`/`published:`/`protocol:`) is **rejected** with a clear error — it is not silently ignored. |
 | `volumes` | list of `[SOURCE:]TARGET[:MODE]` | ✅ | Short syntax only. See [Networks and volumes](#networks-and-volumes). The long map form is **rejected** the same way. |
 | `depends_on` | list of names, or map of `name: { condition, required }` | ✅ | See [Startup order and health](#startup-order-and-health). |
 | `healthcheck` | map (`test`, `interval`, `timeout`, `retries`, `start_period`, `disable`) | ✅ | See [Healthchecks](#healthchecks). |
 | `networks` | list of names, or map of `name: {...}` | ✅ (membership); ⚠️ (map values) | See [Networks and volumes](#networks-and-volumes) — only the *keys* of the map form are read; per-network `aliases`/`ipv4_address` etc. are not. |
-| `labels` | map, or list of `KEY=VALUE` | ❌ parsed only | Recognized but never applied as container labels (WSLCC's own `wslcc.project`/`wslcc.service`/`wslcc.config-hash` labels are applied regardless). |
-| `restart` | string (`no`, `always`, `on-failure`, `on-failure:N`, `unless-stopped`) | ✅ | Passed through unchanged to the runtime; not validated by WSLCC. |
-| `container_name` | string | ❌ parsed only | The container is always named `<project>-<service>` (see [Project name](cli-mapping.md#project-name-and-connection)); an explicit `container_name:` is ignored. |
-| `working_dir` | string | ❌ parsed only | Recognized but the image's own working directory is always used. |
-| `user` | string | ❌ parsed only | Recognized but the image's own user is always used. |
+| `labels` | map, or list of `KEY=VALUE` | ✅ | Applied as container `--label`s. WSLCC's own `wslcc.project` / `wslcc.service` / `wslcc.config-hash` always win if a service label uses the same key. |
+| `restart` | string (`no`, `always`, `on-failure`, `on-failure:N`, `unless-stopped`) | ✅ | Passed through as `--restart`. Docker accepts it; current `wslc` preview may reject the flag as unknown. |
+| `container_name` | string | ✅ | When set, used as the runtime `--name` instead of `<project>-<service>`. Two services may not resolve to the same name. Service discovery still uses the service key as a network alias. |
+| `working_dir` | string | ✅ | Passed as `-w` / `--workdir`. |
+| `user` | string | ✅ | Passed as `-u` / `--user`. |
 | `profiles` | list of strings | n/a | Consumed entirely during client-side resolution (see [Profiles](#profiles)); the daemon never sees this key. |
 | `extends` | string, or map (`service`, `file`) | n/a | Consumed entirely during client-side resolution (see [`extends`](#extends)); the daemon never sees this key. |
 
@@ -74,15 +74,17 @@ A relative `context` resolves against the compose file's directory (sent to the 
 services:
   worker:
     command: ["npm", "run", "worker"]   # exec form — each element becomes one argv token
+    entrypoint: ["/entrypoint.sh"]
   legacy:
     command: npm start                  # shell form — run as /bin/sh -c "npm start"
+    entrypoint: npm start               # same shell-form expansion for entrypoint
 ```
 
 The **list form** is applied token-by-token, exactly like Compose's exec form.
 
 The **string short form** matches Compose: it is run as `/bin/sh -c "<string>"` (not word-split into argv). Prefer the list form when you want exec semantics without a shell.
 
-`entrypoint:` is parsed (both forms) but never applied — see the table above.
+`entrypoint:` uses the same two forms and is applied via `--entrypoint` (additional entrypoint tokens are placed after the image, before `command:`).
 
 ### Environment
 
@@ -100,7 +102,20 @@ services:
 
 Map form and list form (`KEY=VALUE`) are equivalent. A **bare key** (no `=`, or an explicit YAML `null` in map form) passes the value through from `wslccd`'s own process environment at container-start time — the same meaning as `docker run -e KEY` — rather than from the compose file's `.env`/interpolation environment. If `wslccd` doesn't have that variable set, the container simply doesn't get it.
 
-`env_file:` is parsed but its files are never loaded into the container (see the table above); list every variable directly under `environment:` instead.
+`env_file:` loads variables into the container (runtime `--env-file`), in list order, before `environment:` overrides:
+
+```yaml
+services:
+  api:
+    env_file:
+      - ./common.env
+      - path: ./optional.env
+        required: false
+    environment:
+      NODE_ENV: production   # wins over the same key in an env_file
+```
+
+Relative paths resolve against the project directory (`--project-directory` / first compose file's directory), same as bind-mount sources and build context. The daemon must be able to read those paths (local `wslccd`; not useful over a remote HTTP endpoint that cannot see your disk).
 
 ### Startup order and health
 

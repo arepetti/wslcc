@@ -58,36 +58,26 @@ Full command mapping: [cli-mapping.md#coming-from-docker-compose](cli-mapping.md
 
 These are the ones that bite when you reuse an existing file: WSLCC may accept the YAML (or a close subset) while runtime behavior diverges.
 
-### Parsed but not applied (silent — no error)
-
-You get no failure; the key is simply ignored at container create time. Prefer rewriting or verifying with `compose config` + a real `up`.
-
-| Key | Compose expectation | WSLCC today |
-| --- | --- | --- |
-| `container_name` | Fixed container name | Always `<project>-<service>` |
-| `user` | Run as that user | Image default user |
-| `working_dir` | Working directory | Image default |
-| `entrypoint` | Override entrypoint | Image entrypoint unchanged |
-| `labels` (service) | Container labels | Only WSLCC’s own labels are set |
-| `env_file` | Load vars into the container | **Not read** into the container (use `environment:`; `--env-file`/`.env` only affect *interpolation*) |
-
-Full table: [compose-file.md#service-reference](compose-file.md#service-reference). Tracked in [todo.md](todo.md).
-
 ### Applied with different semantics
 
 | Key / form | Compose | WSLCC |
 | --- | --- | --- |
-| `command: "npm start"` (string) | Shell form: `/bin/sh -c "…"` | Same shell form (`/bin/sh -c`). List form remains exec (no shell). |
+| `command:` / `entrypoint:` string | Shell form: `/bin/sh -c "…"` | Same shell form. List form remains exec (no shell). |
 | `environment: [FOO]` / bare `FOO:` | Inherit from the **client** shell / project env | Passed as `-e FOO` to the runtime → inherits from **`wslccd`’s** process environment, not your shell |
+| `env_file` vs CLI `--env-file` / `.env` | Both feed container env / project env per Compose rules | Service `env_file:` → container `--env-file`. CLI `--env-file` / `.env` only affect *interpolation* |
+| `container_name` | Fixed name; blocks scale | Honored; duplicate names across services fail `up` |
+| `labels` (service) | Container labels (+ Compose’s own) | Honored; WSLCC’s `wslcc.*` labels win on key clash |
 | `ports` / `volumes` long map form | Supported | **Rejected** with an error (short syntax only) |
 | `networks:` map values (`aliases`, `ipv4_address`, …) | Applied | Only membership (keys) applied; map values ignored |
 | Top-level `networks` / `volumes` | `driver`, `external`, `name`, IPAM, `driver_opts`, … | Only `driver` and `external` modeled; no resource `name:` override, no IPAM |
+
+Full applied-key table: [compose-file.md#service-reference](compose-file.md#service-reference).
 
 ### Not read at all (silently dropped)
 
 Including but not limited to: top-level and service `configs`, `secrets`, `deploy`, and every other service key not listed in the [service reference](compose-file.md#service-reference) (`privileged`, `cap_add`, `cap_drop`, `read_only`, `devices`, `tmpfs`, `ulimits`, `extra_hosts`, `dns`, `hostname`, `domainname`, `shm_size`, `pids_limit`, `init`, `stdin_open`, `tty`, `network_mode`, `pid`, `ipc`, `uts`, `stop_grace_period`, `stop_signal`, `expose`, `volumes_from`, `links`, `scale` / deploy replicas, …).
 
-**Security note:** keys like `user:`, `read_only:`, `privileged:`, and `cap_drop:` can look like they harden a container. If they are only “not read” or “parsed only”, they have **no effect** — do not assume the YAML you trusted under Compose still enforces those constraints under WSLCC.
+**Security note:** `user:` is applied. Keys that are still unread (`read_only:`, `privileged:`, `cap_drop:`, …) have **no effect** — do not assume the YAML you trusted under Compose still enforces those constraints under WSLCC.
 
 ---
 
@@ -116,7 +106,7 @@ These matter if you rely on multi-file overrides or `extends` the way Compose do
 | Sequence merge for long-form ports/volumes | Unique-key merge by target | N/A (long form rejected); short-form lists append + exact-dedup |
 | `build: .` merged with `build: { dockerfile: … }` | Becomes `{ context: ., dockerfile: … }` | Override can **drop** the string-side context (map wins wholesale when types differ) |
 | Long-form `depends_on` field merge | Per-dependency fields merge | Overriding one field (e.g. `required`) can **replace** the whole dependency object and lose `condition` |
-| `extends` non-inheritable keys | e.g. `container_name` not inherited | Several keys may still merge from the base (and then still not apply at runtime — see above) |
+| `extends` non-inheritable keys | e.g. `container_name` not inherited | Several keys may still merge from the base (stricter Compose non-inherit rules not fully matched) |
 
 Details and tracking: [compose-file.md#resolution-features](compose-file.md#resolution-features), [todo.md](todo.md).
 
@@ -131,8 +121,8 @@ Details and tracking: [compose-file.md#resolution-features](compose-file.md#reso
    wslcc compose config
    wslcc compose config --hash "*"
    ```
-4. Search your compose files for: `env_file:`, `container_name:`, `user:`, `working_dir:`, `entrypoint:`, service `labels:`, long-form `ports`/`volumes`, `configs`/`secrets`/`deploy`, `privileged` / `cap_*` / `read_only`, and bare `environment` keys you expect from your shell.
-5. Fold `env_file` into `environment`; pass `-f` for overrides explicitly; use `--project-directory` if you invoke from another cwd.
+4. Search your compose files for: long-form `ports`/`volumes`, `configs`/`secrets`/`deploy`, `privileged` / `cap_*` / `read_only`, and bare `environment` keys you expect from your shell (those inherit from `wslccd`, not your client shell).
+5. Pass `-f` for overrides explicitly; use `--project-directory` if you invoke from another cwd (also affects `env_file:` / bind / build path resolution).
 6. Bring the stack up under WSLCC (`up -d`), verify with `wslcc compose ps` — not `docker compose ps`.
 7. Tear down with `wslcc compose down` (add `-v` only if you intend to delete named volumes).
 

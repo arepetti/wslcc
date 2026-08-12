@@ -172,6 +172,67 @@ public sealed class ComposeFileParserTests
     }
 
     [Fact]
+    public void String_entrypoint_expands_to_shell_form()
+    {
+        const string yaml = """
+            services:
+              web:
+                image: busybox
+                entrypoint: npm start
+            """;
+
+        var file = _parser.Parse(yaml);
+
+        Assert.Equal(new[] { "/bin/sh", "-c", "npm start" }, file.Services["web"].Entrypoint);
+    }
+
+    [Fact]
+    public void Parses_env_file_short_and_long_forms()
+    {
+        const string yaml = """
+            services:
+              web:
+                image: busybox
+                env_file:
+                  - ./a.env
+                  - path: ./b.env
+                    required: false
+            """;
+
+        var file = _parser.Parse(yaml);
+        var files = file.Services["web"].EnvFile;
+
+        Assert.Equal(2, files.Count);
+        Assert.Equal("./a.env", files[0].Path);
+        Assert.True(files[0].Required);
+        Assert.Equal("./b.env", files[1].Path);
+        Assert.False(files[1].Required);
+    }
+
+    [Fact]
+    public void Parses_user_workdir_labels_container_name()
+    {
+        const string yaml = """
+            services:
+              web:
+                image: busybox
+                container_name: my-web
+                user: "1000:1000"
+                working_dir: /app
+                labels:
+                  com.example.team: platform
+            """;
+
+        var file = _parser.Parse(yaml);
+        var web = file.Services["web"];
+
+        Assert.Equal("my-web", web.ContainerName);
+        Assert.Equal("1000:1000", web.User);
+        Assert.Equal("/app", web.WorkingDir);
+        Assert.Equal("platform", web.Labels["com.example.team"]);
+    }
+
+    [Fact]
     public void Rejects_map_command()
     {
         const string yaml = """
