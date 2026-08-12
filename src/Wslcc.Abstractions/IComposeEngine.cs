@@ -34,6 +34,7 @@ public interface IComposeEngine
     /// replaced. Passing <c>--pull</c> or <c>--build</c> (<see cref="BuildPolicy.Always"/>) forces
     /// recreation regardless of the hash.
     /// </para>
+    /// When <paramref name="progress"/> is provided, per-service updates are reported as work proceeds.
     /// Never throws for a single service failure; the outcome is captured per service.
     /// </summary>
     Task<IReadOnlyList<ServiceOperationResult>> UpAsync(
@@ -44,6 +45,7 @@ public interface IComposeEngine
         BuildPolicy buildPolicy,
         string? baseDirectory,
         IReadOnlyDictionary<string, string>? serviceConfigHashes = null,
+        IProgress<ServiceProgressUpdate>? progress = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -57,6 +59,7 @@ public interface IComposeEngine
         ComposeFile? file,
         string? providerName,
         bool removeVolumes = false,
+        IProgress<ServiceProgressUpdate>? progress = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -67,6 +70,7 @@ public interface IComposeEngine
         string? projectName,
         string? providerName,
         bool all,
+        IProgress<ServiceProgressUpdate>? progress = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -81,6 +85,7 @@ public interface IComposeEngine
         ComposeFile? file,
         string? providerName,
         IReadOnlyList<string>? services,
+        IProgress<ServiceProgressUpdate>? progress = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -94,6 +99,7 @@ public interface IComposeEngine
         ComposeFile? file,
         string? providerName,
         IReadOnlyList<string>? services,
+        IProgress<ServiceProgressUpdate>? progress = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -107,6 +113,7 @@ public interface IComposeEngine
         ComposeFile? file,
         string? providerName,
         IReadOnlyList<string>? services,
+        IProgress<ServiceProgressUpdate>? progress = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -119,6 +126,7 @@ public interface IComposeEngine
         ComposeFile file,
         string? providerName,
         IReadOnlyList<string>? services,
+        IProgress<ServiceProgressUpdate>? progress = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -134,6 +142,7 @@ public interface IComposeEngine
         string? providerName,
         string? baseDirectory,
         IReadOnlyList<string>? services,
+        IProgress<ServiceProgressUpdate>? progress = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>

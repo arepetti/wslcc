@@ -73,7 +73,7 @@ sequenceDiagram
 
 `Ping` is a fast readiness RPC that does not touch providers (used by `daemon start`/`status`), while `GetVersion` resolves each provider's underlying tool version and may shell out to `docker`/`wslc`.
 
-Every compose lifecycle RPC (`Up`, `Down`, `Ps`, `Start`, `Stop`, `Restart`, `Pull`, `Build`) is unary except `Logs`, which is server-streaming: the daemon fans in one `{exe} logs [--follow]` process per matching container (via `IContainerProvider.GetLogsAsync`, an `IAsyncEnumerable<string>`) into a single tagged stream, and the client reads it as an `IAsyncEnumerable<LogLine>`. Cancelling the call (client disconnect, or Ctrl+C in the CLI) kills the underlying processes so a `--follow` invocation stops promptly instead of leaking.
+Compose lifecycle RPCs (`Up`, `Down`, `Ps`, `Start`, `Stop`, `Restart`, `Pull`, `Build`) are **server-streaming**: the engine reports `ServiceProgressUpdate` via `IProgress` while work runs; the gRPC layer emits `ServiceProgress` messages, then a single completed response (`UpResponse`, …). The typed client (`WslccClient`) collects the stream into the completed response and optionally forwards progress to an `IProgress<ServiceProgress>` (the CLI prints per-service lines). `Logs` remains a separate server stream of `LogLine`: the daemon fans in one `{exe} logs [--follow]` process per matching container into a tagged stream. Cancelling a call (client disconnect, or Ctrl+C) stops follow/log pumps promptly.
 
 ## Transport
 

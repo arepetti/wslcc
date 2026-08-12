@@ -37,7 +37,7 @@ public sealed class ComposePsCommand : AsyncCommand<ComposePsCommand.Settings>
         try
         {
             using var client = new WslccClient(settings.Host);
-            var response = await client.PsAsync(request, cancellationToken).ConfigureAwait(false);
+            var response = await client.PsAsync(request, progress: null, cancellationToken).ConfigureAwait(false);
 
             var scoped = !string.IsNullOrEmpty(response.ProjectName);
 

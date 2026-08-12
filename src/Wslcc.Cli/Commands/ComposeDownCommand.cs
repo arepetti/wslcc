@@ -43,8 +43,8 @@ public sealed class ComposeDownCommand : AsyncCommand<ComposeDownCommand.Setting
         try
         {
             using var client = new WslccClient(settings.Host);
-            var response = await AnsiConsole.Status()
-                .StartAsync("Stopping services...", async _ => await client.DownAsync(request, cancellationToken))
+            AnsiConsole.MarkupLine("[bold]Stopping services…[/]");
+            var response = await client.DownAsync(request, ProgressDisplay.Create(), cancellationToken)
                 .ConfigureAwait(false);
 
             AnsiConsole.MarkupLine($"[bold]Project:[/] {response.ProjectName.EscapeMarkup()}");
@@ -55,21 +55,7 @@ public sealed class ComposeDownCommand : AsyncCommand<ComposeDownCommand.Setting
                 return 0;
             }
 
-            var failed = 0;
-            foreach (var result in response.Results)
-            {
-                if (string.Equals(result.Status, "failed", StringComparison.OrdinalIgnoreCase))
-                {
-                    failed++;
-                    AnsiConsole.MarkupLine($"  [red]x[/] {result.Service.EscapeMarkup()}: {result.Error.EscapeMarkup()}");
-                }
-                else
-                {
-                    AnsiConsole.MarkupLine($"  [green]-[/] {result.Service.EscapeMarkup()} ({result.Status.EscapeMarkup()})");
-                }
-            }
-
-            return failed > 0 ? 1 : 0;
+            return ServiceResults.FailedCount(response.Results) > 0 ? 1 : 0;
         }
         catch (RpcException ex)
         {

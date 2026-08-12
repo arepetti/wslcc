@@ -24,6 +24,9 @@ No version has been tagged or published yet; everything below is under developme
 - Targets `net10.0`.
 - Documentation: [docs/troubleshooting.md](docs/troubleshooting.md), [docs/compatibility.md](docs/compatibility.md), [docs/README.md](docs/README.md), roadmap milestones.
 
+### Changed
+- Compose lifecycle RPCs (`Up`/`Down`/`Ps`/`Start`/`Stop`/`Restart`/`Pull`/`Build`) are server-streaming: per-service `ServiceProgress` events, then a completed response. The CLI prints live progress instead of a blocking spinner.
+
 ### Fixed
 - `compose pull` skips build-only services (no `image:`) instead of reporting them as failed.
 - Long-form `ports:` / `volumes:` map entries are rejected with a clear error instead of being coerced into a garbage runtime argument.

@@ -56,12 +56,7 @@ Bound from the `Wslcc` section of `appsettings.json`:
 | `Ping` | Fast readiness/liveness check (no provider calls). Used by `daemon start`/`status`. |
 | `GetVersion` | Daemon version + per-provider tool versions. Used by `wslcc version` / `compose version`. |
 | `Shutdown` | Graceful stop. Used by `daemon stop`. |
-| `Up` | Create and start a project's containers. |
-| `Down` | Stop and remove a project's containers (and optionally volumes). |
-| `Ps` | List a project's containers (or every wslcc-managed container when no project is specified). |
-| `Start` / `Stop` / `Restart` | Lifecycle for existing containers. |
-| `Pull` | Pull service images. |
-| `Build` | Build images for services with a `build:` section. |
+| `Up` / `Down` / `Ps` / `Start` / `Stop` / `Restart` / `Pull` / `Build` | Server-streaming lifecycle: zero or more `ServiceProgress` events, then one completed response (`UpResponse`, …). Progress carries per-service `phase`/`status` while work runs. |
 | `Logs` | Server-streaming log lines from the project's containers. |
 
 `wslcc compose config` is intentionally **not** an RPC: it runs entirely client-side (resolution needs the caller's files and environment). See [cli-mapping.md](cli-mapping.md#wslcc-compose-config).

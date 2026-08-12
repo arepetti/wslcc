@@ -71,176 +71,176 @@ public sealed class WslccGrpcService : global::Wslcc.Grpc.Contracts.Wslcc.WslccB
         return Task.FromResult(new ShutdownResponse { Accepted = true });
     }
 
-    public override async Task<UpResponse> Up(UpRequest request, ServerCallContext context)
-    {
-        var file = Parse(request.ComposeYaml);
-        if (file is null)
+    public override Task Up(UpRequest request, IServerStreamWriter<UpEvent> responseStream, ServerCallContext context)
+        => StreamGuard(async () =>
         {
-            throw new RpcException(new Status(StatusCode.InvalidArgument, "No compose file content was provided."));
-        }
+            var file = RequireComposeFile(request.ComposeYaml);
+            var project = ProjectNames.Resolve(request.ProjectName, file, request.DefaultProjectName);
+            var buildPolicy = request.BuildPolicy switch
+            {
+                global::Wslcc.Grpc.Contracts.BuildPolicy.Always => global::Wslcc.Abstractions.BuildPolicy.Always,
+                global::Wslcc.Grpc.Contracts.BuildPolicy.Never => global::Wslcc.Abstractions.BuildPolicy.Never,
+                _ => global::Wslcc.Abstractions.BuildPolicy.Auto,
+            };
+            var configHashes = ComposeHash.ComputeServiceHashes(request.ComposeYaml);
 
-        var project = ProjectNames.Resolve(request.ProjectName, file, request.DefaultProjectName);
+            await ProgressStream.WriteOperationAsync(
+                responseStream,
+                (progress, ct) => _engine.UpAsync(
+                    project, file, NullIfEmpty(request.Provider), request.Pull, buildPolicy,
+                    NullIfEmpty(request.BaseDirectory), configHashes, progress, ct),
+                p => new UpEvent { Progress = p },
+                results =>
+                {
+                    var response = new UpResponse { ProjectName = project };
+                    response.Results.AddRange(results.Select(ToServiceResult));
+                    return new UpEvent { Completed = response };
+                },
+                context).ConfigureAwait(false);
+        });
 
-        var buildPolicy = request.BuildPolicy switch
+    public override Task Down(DownRequest request, IServerStreamWriter<DownEvent> responseStream, ServerCallContext context)
+        => StreamGuard(async () =>
         {
-            global::Wslcc.Grpc.Contracts.BuildPolicy.Always => global::Wslcc.Abstractions.BuildPolicy.Always,
-            global::Wslcc.Grpc.Contracts.BuildPolicy.Never => global::Wslcc.Abstractions.BuildPolicy.Never,
-            _ => global::Wslcc.Abstractions.BuildPolicy.Auto,
-        };
+            var file = Parse(request.ComposeYaml);
+            var project = RequireProject(request.ProjectName, file, request.DefaultProjectName);
 
-        // The per-service config hash (identical to `config --hash`) lets the engine leave unchanged,
-        // still-running containers in place instead of recreating them.
-        var configHashes = ComposeHash.ComputeServiceHashes(request.ComposeYaml);
+            await ProgressStream.WriteOperationAsync(
+                responseStream,
+                (progress, ct) => _engine.DownAsync(
+                    project, file, NullIfEmpty(request.Provider), request.Volumes, progress, ct),
+                p => new DownEvent { Progress = p },
+                results =>
+                {
+                    var response = new DownResponse { ProjectName = project };
+                    response.Results.AddRange(results.Select(ToServiceResult));
+                    return new DownEvent { Completed = response };
+                },
+                context).ConfigureAwait(false);
+        });
 
-        var results = await Guard(() =>
-            _engine.UpAsync(
-                project, file, NullIfEmpty(request.Provider), request.Pull, buildPolicy, NullIfEmpty(request.BaseDirectory),
-                configHashes, context.CancellationToken))
-            .ConfigureAwait(false);
-
-        var response = new UpResponse { ProjectName = project };
-        response.Results.AddRange(results.Select(ToServiceResult));
-        return response;
-    }
-
-    public override async Task<DownResponse> Down(DownRequest request, ServerCallContext context)
-    {
-        var file = Parse(request.ComposeYaml);
-        var project = ProjectNames.ResolveOrNull(request.ProjectName, file, request.DefaultProjectName);
-        if (project is null)
+    public override Task Ps(PsRequest request, IServerStreamWriter<PsEvent> responseStream, ServerCallContext context)
+        => StreamGuard(async () =>
         {
-            throw new RpcException(new Status(
-                StatusCode.InvalidArgument,
-                "No project specified. Provide a compose file (-f) or a project name (-p)."));
-        }
+            var file = Parse(request.ComposeYaml);
+            var project = ProjectNames.ResolveOrNull(request.ProjectName, file, request.DefaultProjectName);
 
-        var results = await Guard(() =>
-            _engine.DownAsync(project, file, NullIfEmpty(request.Provider), request.Volumes, context.CancellationToken))
-            .ConfigureAwait(false);
+            await ProgressStream.WriteOperationAsync(
+                responseStream,
+                (progress, ct) => _engine.PsAsync(project, NullIfEmpty(request.Provider), request.All, progress, ct),
+                p => new PsEvent { Progress = p },
+                containers =>
+                {
+                    var response = new PsResponse { ProjectName = project ?? string.Empty };
+                    response.Containers.AddRange(containers.Select(ToContainer));
+                    return new PsEvent { Completed = response };
+                },
+                context).ConfigureAwait(false);
+        });
 
-        var response = new DownResponse { ProjectName = project };
-        response.Results.AddRange(results.Select(ToServiceResult));
-        return response;
-    }
-
-    public override async Task<PsResponse> Ps(PsRequest request, ServerCallContext context)
-    {
-        var file = Parse(request.ComposeYaml);
-        // Null project means "list every wslcc-managed container, across all projects".
-        var project = ProjectNames.ResolveOrNull(request.ProjectName, file, request.DefaultProjectName);
-
-        var containers = await Guard(() =>
-            _engine.PsAsync(project, NullIfEmpty(request.Provider), request.All, context.CancellationToken))
-            .ConfigureAwait(false);
-
-        var response = new PsResponse { ProjectName = project ?? string.Empty };
-        response.Containers.AddRange(containers.Select(ToContainer));
-        return response;
-    }
-
-    public override async Task<StartResponse> Start(StartRequest request, ServerCallContext context)
-    {
-        var file = Parse(request.ComposeYaml);
-        var project = ProjectNames.ResolveOrNull(request.ProjectName, file, request.DefaultProjectName);
-        if (project is null)
+    public override Task Start(StartRequest request, IServerStreamWriter<StartEvent> responseStream, ServerCallContext context)
+        => StreamGuard(async () =>
         {
-            throw new RpcException(new Status(
-                StatusCode.InvalidArgument,
-                "No project specified. Provide a compose file (-f) or a project name (-p)."));
-        }
+            var file = Parse(request.ComposeYaml);
+            var project = RequireProject(request.ProjectName, file, request.DefaultProjectName);
+            var services = request.Services.Count > 0 ? request.Services.ToList() : null;
 
-        var services = request.Services.Count > 0 ? request.Services.ToList() : null;
-        var results = await Guard(() =>
-            _engine.StartAsync(project, file, NullIfEmpty(request.Provider), services, context.CancellationToken))
-            .ConfigureAwait(false);
+            await ProgressStream.WriteOperationAsync(
+                responseStream,
+                (progress, ct) => _engine.StartAsync(
+                    project, file, NullIfEmpty(request.Provider), services, progress, ct),
+                p => new StartEvent { Progress = p },
+                results =>
+                {
+                    var response = new StartResponse { ProjectName = project };
+                    response.Results.AddRange(results.Select(ToServiceResult));
+                    return new StartEvent { Completed = response };
+                },
+                context).ConfigureAwait(false);
+        });
 
-        var response = new StartResponse { ProjectName = project };
-        response.Results.AddRange(results.Select(ToServiceResult));
-        return response;
-    }
-
-    public override async Task<StopResponse> Stop(StopRequest request, ServerCallContext context)
-    {
-        var file = Parse(request.ComposeYaml);
-        var project = ProjectNames.ResolveOrNull(request.ProjectName, file, request.DefaultProjectName);
-        if (project is null)
+    public override Task Stop(StopRequest request, IServerStreamWriter<StopEvent> responseStream, ServerCallContext context)
+        => StreamGuard(async () =>
         {
-            throw new RpcException(new Status(
-                StatusCode.InvalidArgument,
-                "No project specified. Provide a compose file (-f) or a project name (-p)."));
-        }
+            var file = Parse(request.ComposeYaml);
+            var project = RequireProject(request.ProjectName, file, request.DefaultProjectName);
+            var services = request.Services.Count > 0 ? request.Services.ToList() : null;
 
-        var services = request.Services.Count > 0 ? request.Services.ToList() : null;
-        var results = await Guard(() =>
-            _engine.StopAsync(project, file, NullIfEmpty(request.Provider), services, context.CancellationToken))
-            .ConfigureAwait(false);
+            await ProgressStream.WriteOperationAsync(
+                responseStream,
+                (progress, ct) => _engine.StopAsync(
+                    project, file, NullIfEmpty(request.Provider), services, progress, ct),
+                p => new StopEvent { Progress = p },
+                results =>
+                {
+                    var response = new StopResponse { ProjectName = project };
+                    response.Results.AddRange(results.Select(ToServiceResult));
+                    return new StopEvent { Completed = response };
+                },
+                context).ConfigureAwait(false);
+        });
 
-        var response = new StopResponse { ProjectName = project };
-        response.Results.AddRange(results.Select(ToServiceResult));
-        return response;
-    }
-
-    public override async Task<RestartResponse> Restart(RestartRequest request, ServerCallContext context)
-    {
-        var file = Parse(request.ComposeYaml);
-        var project = ProjectNames.ResolveOrNull(request.ProjectName, file, request.DefaultProjectName);
-        if (project is null)
+    public override Task Restart(RestartRequest request, IServerStreamWriter<RestartEvent> responseStream, ServerCallContext context)
+        => StreamGuard(async () =>
         {
-            throw new RpcException(new Status(
-                StatusCode.InvalidArgument,
-                "No project specified. Provide a compose file (-f) or a project name (-p)."));
-        }
+            var file = Parse(request.ComposeYaml);
+            var project = RequireProject(request.ProjectName, file, request.DefaultProjectName);
+            var services = request.Services.Count > 0 ? request.Services.ToList() : null;
 
-        var services = request.Services.Count > 0 ? request.Services.ToList() : null;
-        var results = await Guard(() =>
-            _engine.RestartAsync(project, file, NullIfEmpty(request.Provider), services, context.CancellationToken))
-            .ConfigureAwait(false);
+            await ProgressStream.WriteOperationAsync(
+                responseStream,
+                (progress, ct) => _engine.RestartAsync(
+                    project, file, NullIfEmpty(request.Provider), services, progress, ct),
+                p => new RestartEvent { Progress = p },
+                results =>
+                {
+                    var response = new RestartResponse { ProjectName = project };
+                    response.Results.AddRange(results.Select(ToServiceResult));
+                    return new RestartEvent { Completed = response };
+                },
+                context).ConfigureAwait(false);
+        });
 
-        var response = new RestartResponse { ProjectName = project };
-        response.Results.AddRange(results.Select(ToServiceResult));
-        return response;
-    }
-
-    public override async Task<PullResponse> Pull(PullRequest request, ServerCallContext context)
-    {
-        var file = Parse(request.ComposeYaml);
-        if (file is null)
+    public override Task Pull(PullRequest request, IServerStreamWriter<PullEvent> responseStream, ServerCallContext context)
+        => StreamGuard(async () =>
         {
-            throw new RpcException(new Status(StatusCode.InvalidArgument, "No compose file content was provided."));
-        }
+            var file = RequireComposeFile(request.ComposeYaml);
+            var project = ProjectNames.Resolve(request.ProjectName, file, request.DefaultProjectName);
+            var services = request.Services.Count > 0 ? request.Services.ToList() : null;
 
-        var project = ProjectNames.Resolve(request.ProjectName, file, request.DefaultProjectName);
-        var services = request.Services.Count > 0 ? request.Services.ToList() : null;
+            await ProgressStream.WriteOperationAsync(
+                responseStream,
+                (progress, ct) => _engine.PullAsync(file, NullIfEmpty(request.Provider), services, progress, ct),
+                p => new PullEvent { Progress = p },
+                results =>
+                {
+                    var response = new PullResponse { ProjectName = project };
+                    response.Results.AddRange(results.Select(ToServiceResult));
+                    return new PullEvent { Completed = response };
+                },
+                context).ConfigureAwait(false);
+        });
 
-        var results = await Guard(() =>
-            _engine.PullAsync(file, NullIfEmpty(request.Provider), services, context.CancellationToken))
-            .ConfigureAwait(false);
-
-        var response = new PullResponse { ProjectName = project };
-        response.Results.AddRange(results.Select(ToServiceResult));
-        return response;
-    }
-
-    public override async Task<BuildResponse> Build(BuildRequest request, ServerCallContext context)
-    {
-        var file = Parse(request.ComposeYaml);
-        if (file is null)
+    public override Task Build(BuildRequest request, IServerStreamWriter<BuildEvent> responseStream, ServerCallContext context)
+        => StreamGuard(async () =>
         {
-            throw new RpcException(new Status(StatusCode.InvalidArgument, "No compose file content was provided."));
-        }
+            var file = RequireComposeFile(request.ComposeYaml);
+            var project = ProjectNames.Resolve(request.ProjectName, file, request.DefaultProjectName);
+            var services = request.Services.Count > 0 ? request.Services.ToList() : null;
 
-        var project = ProjectNames.Resolve(request.ProjectName, file, request.DefaultProjectName);
-        var services = request.Services.Count > 0 ? request.Services.ToList() : null;
-
-        var results = await Guard(() =>
-            _engine.BuildAsync(
-                project, file, NullIfEmpty(request.Provider), NullIfEmpty(request.BaseDirectory), services, context.CancellationToken))
-            .ConfigureAwait(false);
-
-        var response = new BuildResponse { ProjectName = project };
-        response.Results.AddRange(results.Select(ToServiceResult));
-        return response;
-    }
+            await ProgressStream.WriteOperationAsync(
+                responseStream,
+                (progress, ct) => _engine.BuildAsync(
+                    project, file, NullIfEmpty(request.Provider), NullIfEmpty(request.BaseDirectory), services, progress, ct),
+                p => new BuildEvent { Progress = p },
+                results =>
+                {
+                    var response = new BuildResponse { ProjectName = project };
+                    response.Results.AddRange(results.Select(ToServiceResult));
+                    return new BuildEvent { Completed = response };
+                },
+                context).ConfigureAwait(false);
+        });
 
     public override async Task Logs(
         LogsRequest request,
@@ -294,15 +294,11 @@ public sealed class WslccGrpcService : global::Wslcc.Grpc.Contracts.Wslcc.WslccB
         }
     }
 
-    /// <summary>
-    /// Runs an engine call and translates domain failures into meaningful gRPC statuses so the CLI can
-    /// show the underlying reason (e.g. "docker engine not running") instead of an opaque "Unknown".
-    /// </summary>
-    private static async Task<T> Guard<T>(Func<Task<T>> operation)
+    private static async Task StreamGuard(Func<Task> operation)
     {
         try
         {
-            return await operation().ConfigureAwait(false);
+            await operation().ConfigureAwait(false);
         }
         catch (ComposeLoadException ex)
         {
@@ -316,6 +312,34 @@ public sealed class WslccGrpcService : global::Wslcc.Grpc.Contracts.Wslcc.WslccB
         {
             throw new RpcException(new Status(StatusCode.FailedPrecondition, ex.Message));
         }
+        catch (RpcException)
+        {
+            throw;
+        }
+    }
+
+    private static ComposeFile RequireComposeFile(string? yaml)
+    {
+        var file = Parse(yaml);
+        if (file is null)
+        {
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "No compose file content was provided."));
+        }
+
+        return file;
+    }
+
+    private static string RequireProject(string projectName, ComposeFile? file, string defaultProjectName)
+    {
+        var project = ProjectNames.ResolveOrNull(projectName, file, defaultProjectName);
+        if (project is null)
+        {
+            throw new RpcException(new Status(
+                StatusCode.InvalidArgument,
+                "No project specified. Provide a compose file (-f) or a project name (-p)."));
+        }
+
+        return project;
     }
 
     private static ComposeFile? Parse(string? yaml)

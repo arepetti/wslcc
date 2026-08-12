@@ -294,6 +294,76 @@ public sealed class ComposeEngineTests
         Assert.Equal(new[] { "/bin/sh", "-c", "npm start" }, web.Command);
     }
 
+    private sealed class CollectingProgress : IProgress<ServiceProgressUpdate>
+    {
+        public List<ServiceProgressUpdate> Items { get; } = new();
+
+        public void Report(ServiceProgressUpdate value) => Items.Add(value);
+    }
+
+    [Fact]
+    public async Task Pull_reports_per_service_progress()
+    {
+        var provider = new FakeProvider("docker", true);
+        var engine = new ComposeEngine(new[] { provider });
+        var file = new ComposeFile();
+        file.Services["web"] = new ServiceSpec { Name = "web", Image = "nginx:1" };
+        file.Services["redis"] = new ServiceSpec { Name = "redis", Image = "redis:7" };
+
+        var progress = new CollectingProgress();
+        await engine.PullAsync(file, providerName: null, services: null, progress);
+
+        Assert.Contains(progress.Items, u => u.Service == "web" && u.Phase == "pulling" && u.IsInProgress);
+        Assert.Contains(progress.Items, u => u.Service == "web" && u.Status == "pulled");
+        Assert.Contains(progress.Items, u => u.Service == "redis" && u.Status == "pulled");
+        Assert.Equal(4, progress.Items.Count);
+    }
+
+    [Fact]
+    public async Task Build_reports_per_service_progress()
+    {
+        var provider = new FakeProvider("docker", true);
+        var engine = new ComposeEngine(new[] { provider });
+        var file = FileWithBuildableService();
+
+        var progress = new CollectingProgress();
+        await engine.BuildAsync("proj", file, null, baseDirectory: null, services: null, progress);
+
+        Assert.Contains(progress.Items, u => u.Service == "web" && u.Phase == "building" && u.IsInProgress);
+        Assert.Contains(progress.Items, u => u.Service == "web" && u.Status == "built");
+    }
+
+    [Fact]
+    public async Task Up_reports_creating_progress_for_started_services()
+    {
+        var provider = new FakeProvider("docker", true);
+        provider.ExistingImages.Add("redis:7");
+        provider.ExistingImages.Add("nginx");
+        var engine = new ComposeEngine(new[] { provider });
+
+        var progress = new CollectingProgress();
+        await engine.UpAsync(
+            "proj", TwoServiceFile(), null, pull: false, BuildPolicy.Never, null, progress: progress);
+
+        Assert.Contains(progress.Items, u => u.Service == "redis" && u.Phase == "creating" && u.IsInProgress);
+        Assert.Contains(progress.Items, u => u.Service == "redis" && u.Status == "started");
+        Assert.Contains(progress.Items, u => u.Service == "web" && u.Status == "started");
+    }
+
+    [Fact]
+    public async Task Start_reports_starting_progress()
+    {
+        var provider = new FakeProvider("docker", true);
+        provider.Existing.Add(new ContainerInfo("id1", "proj-web", "nginx", "exited", Service: "web", Project: "proj"));
+        var engine = new ComposeEngine(new[] { provider });
+
+        var progress = new CollectingProgress();
+        await engine.StartAsync("proj", file: null, null, services: null, progress);
+
+        Assert.Contains(progress.Items, u => u.Service == "web" && u.Phase == "starting" && u.IsInProgress);
+        Assert.Contains(progress.Items, u => u.Service == "web" && u.Status == "started");
+    }
+
     [Fact]
     public async Task Up_applies_container_name_user_workdir_labels_entrypoint_and_env_file()
     {

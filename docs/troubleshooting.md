@@ -21,7 +21,7 @@ Background: [SECURITY.md](../SECURITY.md).
 
 ## `up` seems hung for minutes
 
-`depends_on` conditions `service_healthy` and `service_completed_successfully` wait up to **5 minutes** (hard-coded, not configurable). Until that deadline, attached `up` can look stuck with no progress.
+`depends_on` conditions `service_healthy` and `service_completed_successfully` wait up to **5 minutes** (hard-coded, not configurable). While waiting, the CLI should show a `waiting...` progress line for the dependent; if a dependency never becomes healthy the wait still runs until that deadline.
 
 - Check whether a dependency never becomes healthy: `wslcc compose ps -a` and `wslcc compose logs <service>`.
 - Fix or temporarily drop the health condition, or set `required: false` on that dependency.

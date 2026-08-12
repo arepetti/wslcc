@@ -39,6 +39,7 @@ public sealed class ComposeEngine : IComposeEngine
         BuildPolicy buildPolicy,
         string? baseDirectory,
         IReadOnlyDictionary<string, string>? serviceConfigHashes = null,
+        IProgress<ServiceProgressUpdate>? progress = null,
         CancellationToken cancellationToken = default)
     {
         var provider = ResolveProvider(providerName);
@@ -65,9 +66,10 @@ public sealed class ComposeEngine : IComposeEngine
             var brokenDependency = service.DependsOn.FirstOrDefault(d => d.Required && failed.Contains(d.Name));
             if (brokenDependency is not null)
             {
-                results.Add(new ServiceOperationResult(
-                    service.Name, "failed", Error: $"dependency '{brokenDependency.Name}' failed to start"));
+                var depError = $"dependency '{brokenDependency.Name}' failed to start";
+                results.Add(new ServiceOperationResult(service.Name, "failed", Error: depError));
                 failed.Add(service.Name);
+                Report(progress, service.Name, "creating", "failed", depError);
                 continue;
             }
 
@@ -83,16 +85,24 @@ public sealed class ComposeEngine : IComposeEngine
             {
                 startedContainers[service.Name] = existing.Name;
                 results.Add(new ServiceOperationResult(service.Name, "running", existing.Id));
+                Report(progress, service.Name, "creating", "running", containerId: existing.Id);
                 continue;
             }
 
             try
             {
-                await WaitForDependenciesAsync(provider, projectName, file, service, startedContainers, cancellationToken)
+                if (service.DependsOn.Count > 0)
+                {
+                    Report(progress, service.Name, "waiting", ServiceProgressUpdate.InProgress);
+                    await WaitForDependenciesAsync(provider, projectName, file, service, startedContainers, cancellationToken)
+                        .ConfigureAwait(false);
+                }
+
+                var image = await PrepareServiceImageAsync(
+                        provider, projectName, service, baseDirectory, pull, buildPolicy, progress, cancellationToken)
                     .ConfigureAwait(false);
 
-                var image = await PrepareServiceImageAsync(provider, projectName, service, baseDirectory, pull, buildPolicy, cancellationToken)
-                    .ConfigureAwait(false);
+                Report(progress, service.Name, "creating", ServiceProgressUpdate.InProgress);
 
                 var spec = ToRunSpec(projectName, service, image, baseDirectory);
                 if (configHash is { Length: > 0 })
@@ -125,16 +135,27 @@ public sealed class ComposeEngine : IComposeEngine
 
                 startedContainers[service.Name] = spec.Name;
                 results.Add(new ServiceOperationResult(service.Name, "started", id));
+                Report(progress, service.Name, "creating", "started", containerId: id);
             }
             catch (ProviderException ex)
             {
                 failed.Add(service.Name);
                 results.Add(new ServiceOperationResult(service.Name, "failed", Error: ex.Message));
+                Report(progress, service.Name, "creating", "failed", ex.Message);
             }
         }
 
         return results;
     }
+
+    private static void Report(
+        IProgress<ServiceProgressUpdate>? progress,
+        string service,
+        string phase,
+        string status,
+        string? message = null,
+        string? containerId = null)
+        => progress?.Report(new ServiceProgressUpdate(service, phase, status, message, containerId));
 
     private static bool IsRunning(ContainerInfo container)
         => string.Equals(container.State, "running", StringComparison.OrdinalIgnoreCase);
@@ -285,6 +306,7 @@ public sealed class ComposeEngine : IComposeEngine
         string? baseDirectory,
         bool pull,
         BuildPolicy buildPolicy,
+        IProgress<ServiceProgressUpdate>? progress,
         CancellationToken cancellationToken)
     {
         if (service.Build is not null)
@@ -298,7 +320,9 @@ public sealed class ComposeEngine : IComposeEngine
             switch (buildPolicy)
             {
                 case BuildPolicy.Always:
+                    Report(progress, service.Name, "building", ServiceProgressUpdate.InProgress);
                     await provider.BuildImageAsync(spec, cancellationToken).ConfigureAwait(false);
+                    Report(progress, service.Name, "building", "built");
                     break;
 
                 case BuildPolicy.Never:
@@ -313,7 +337,9 @@ public sealed class ComposeEngine : IComposeEngine
                 default:
                     if (!await provider.ImageExistsAsync(spec.Tag, cancellationToken).ConfigureAwait(false))
                     {
+                        Report(progress, service.Name, "building", ServiceProgressUpdate.InProgress);
                         await provider.BuildImageAsync(spec, cancellationToken).ConfigureAwait(false);
+                        Report(progress, service.Name, "building", "built");
                     }
 
                     break;
@@ -327,7 +353,17 @@ public sealed class ComposeEngine : IComposeEngine
             throw new ProviderException("no 'image' or 'build:' section specified");
         }
 
-        await provider.EnsureImageAsync(service.Image!, pull, cancellationToken).ConfigureAwait(false);
+        if (pull || !await provider.ImageExistsAsync(service.Image!, cancellationToken).ConfigureAwait(false))
+        {
+            Report(progress, service.Name, "pulling", ServiceProgressUpdate.InProgress);
+            await provider.EnsureImageAsync(service.Image!, pull, cancellationToken).ConfigureAwait(false);
+            Report(progress, service.Name, "pulling", "pulled");
+        }
+        else
+        {
+            await provider.EnsureImageAsync(service.Image!, pull, cancellationToken).ConfigureAwait(false);
+        }
+
         return service.Image!;
     }
 
@@ -336,6 +372,7 @@ public sealed class ComposeEngine : IComposeEngine
         ComposeFile? file,
         string? providerName,
         bool removeVolumes = false,
+        IProgress<ServiceProgressUpdate>? progress = null,
         CancellationToken cancellationToken = default)
     {
         var provider = ResolveProvider(providerName);
@@ -350,6 +387,8 @@ public sealed class ComposeEngine : IComposeEngine
             cancellationToken.ThrowIfCancellationRequested();
             var serviceName = container.Service ?? container.Name;
 
+            Report(progress, serviceName, "removing", ServiceProgressUpdate.InProgress, containerId: container.Id);
+
             try
             {
                 await provider.StopContainerAsync(container.Name, cancellationToken).ConfigureAwait(false);
@@ -363,16 +402,18 @@ public sealed class ComposeEngine : IComposeEngine
             {
                 await provider.RemoveContainerAsync(container.Name, force: true, cancellationToken).ConfigureAwait(false);
                 results.Add(new ServiceOperationResult(serviceName, "removed", container.Id));
+                Report(progress, serviceName, "removing", "removed", containerId: container.Id);
             }
             catch (ProviderException ex)
             {
                 results.Add(new ServiceOperationResult(serviceName, "failed", container.Id, ex.Message));
+                Report(progress, serviceName, "removing", "failed", ex.Message, container.Id);
             }
         }
 
         // Remove the networks wslcc created for the project (once their containers are gone). Named
         // volumes are kept unless explicitly requested, matching `docker compose down` (data is precious).
-        await RemoveProjectResourcesAsync(provider, projectName, removeVolumes, results, cancellationToken)
+        await RemoveProjectResourcesAsync(provider, projectName, removeVolumes, results, progress, cancellationToken)
             .ConfigureAwait(false);
 
         return results;
@@ -388,6 +429,7 @@ public sealed class ComposeEngine : IComposeEngine
         string projectName,
         bool removeVolumes,
         List<ServiceOperationResult> results,
+        IProgress<ServiceProgressUpdate>? progress,
         CancellationToken cancellationToken)
     {
         IReadOnlyList<string> networks;
@@ -403,14 +445,18 @@ public sealed class ComposeEngine : IComposeEngine
         foreach (var network in networks)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            var label = $"network {network}";
+            Report(progress, label, "removing", ServiceProgressUpdate.InProgress);
             try
             {
                 await provider.RemoveNetworkAsync(network, cancellationToken).ConfigureAwait(false);
-                results.Add(new ServiceOperationResult($"network {network}", "removed"));
+                results.Add(new ServiceOperationResult(label, "removed"));
+                Report(progress, label, "removing", "removed");
             }
             catch (ProviderException ex)
             {
-                results.Add(new ServiceOperationResult($"network {network}", "failed", Error: ex.Message));
+                results.Add(new ServiceOperationResult(label, "failed", Error: ex.Message));
+                Report(progress, label, "removing", "failed", ex.Message);
             }
         }
 
@@ -432,62 +478,78 @@ public sealed class ComposeEngine : IComposeEngine
         foreach (var volume in volumes)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            var label = $"volume {volume}";
+            Report(progress, label, "removing", ServiceProgressUpdate.InProgress);
             try
             {
                 await provider.RemoveVolumeAsync(volume, cancellationToken).ConfigureAwait(false);
-                results.Add(new ServiceOperationResult($"volume {volume}", "removed"));
+                results.Add(new ServiceOperationResult(label, "removed"));
+                Report(progress, label, "removing", "removed");
             }
             catch (ProviderException ex)
             {
-                results.Add(new ServiceOperationResult($"volume {volume}", "failed", Error: ex.Message));
+                results.Add(new ServiceOperationResult(label, "failed", Error: ex.Message));
+                Report(progress, label, "removing", "failed", ex.Message);
             }
         }
     }
 
-    public Task<IReadOnlyList<ContainerInfo>> PsAsync(
+    public async Task<IReadOnlyList<ContainerInfo>> PsAsync(
         string? projectName,
         string? providerName,
         bool all,
+        IProgress<ServiceProgressUpdate>? progress = null,
         CancellationToken cancellationToken = default)
-        => ResolveProvider(providerName).ListContainersAsync(projectName, all, cancellationToken);
+    {
+        Report(progress, string.Empty, "listing", ServiceProgressUpdate.InProgress);
+        var containers = await ResolveProvider(providerName)
+            .ListContainersAsync(projectName, all, cancellationToken)
+            .ConfigureAwait(false);
+        Report(progress, string.Empty, "listing", "listed", message: $"{containers.Count} container(s)");
+        return containers;
+    }
 
     public Task<IReadOnlyList<ServiceOperationResult>> StartAsync(
         string projectName,
         ComposeFile? file,
         string? providerName,
         IReadOnlyList<string>? services,
+        IProgress<ServiceProgressUpdate>? progress = null,
         CancellationToken cancellationToken = default)
         => ApplyToContainersAsync(
-            projectName, file, providerName, services, "started", reverseOrder: false,
+            projectName, file, providerName, services, "starting", "started", reverseOrder: false,
             (provider, containerName, ct) => provider.StartContainerAsync(containerName, ct),
-            cancellationToken);
+            progress, cancellationToken);
 
     public Task<IReadOnlyList<ServiceOperationResult>> StopAsync(
         string projectName,
         ComposeFile? file,
         string? providerName,
         IReadOnlyList<string>? services,
+        IProgress<ServiceProgressUpdate>? progress = null,
         CancellationToken cancellationToken = default)
         => ApplyToContainersAsync(
-            projectName, file, providerName, services, "stopped", reverseOrder: true,
+            projectName, file, providerName, services, "stopping", "stopped", reverseOrder: true,
             (provider, containerName, ct) => provider.StopContainerAsync(containerName, ct),
-            cancellationToken);
+            progress, cancellationToken);
 
     public Task<IReadOnlyList<ServiceOperationResult>> RestartAsync(
         string projectName,
         ComposeFile? file,
         string? providerName,
         IReadOnlyList<string>? services,
+        IProgress<ServiceProgressUpdate>? progress = null,
         CancellationToken cancellationToken = default)
         => ApplyToContainersAsync(
-            projectName, file, providerName, services, "restarted", reverseOrder: false,
+            projectName, file, providerName, services, "restarting", "restarted", reverseOrder: false,
             (provider, containerName, ct) => provider.RestartContainerAsync(containerName, ct),
-            cancellationToken);
+            progress, cancellationToken);
 
     public async Task<IReadOnlyList<ServiceOperationResult>> PullAsync(
         ComposeFile file,
         string? providerName,
         IReadOnlyList<string>? services,
+        IProgress<ServiceProgressUpdate>? progress = null,
         CancellationToken cancellationToken = default)
     {
         var provider = ResolveProvider(providerName);
@@ -503,14 +565,17 @@ public sealed class ComposeEngine : IComposeEngine
                 continue;
             }
 
+            Report(progress, service.Name, "pulling", ServiceProgressUpdate.InProgress);
             try
             {
                 await provider.EnsureImageAsync(service.Image!, alwaysPull: true, cancellationToken).ConfigureAwait(false);
                 results.Add(new ServiceOperationResult(service.Name, "pulled"));
+                Report(progress, service.Name, "pulling", "pulled");
             }
             catch (ProviderException ex)
             {
                 results.Add(new ServiceOperationResult(service.Name, "failed", Error: ex.Message));
+                Report(progress, service.Name, "pulling", "failed", ex.Message);
             }
         }
 
@@ -523,6 +588,7 @@ public sealed class ComposeEngine : IComposeEngine
         string? providerName,
         string? baseDirectory,
         IReadOnlyList<string>? services,
+        IProgress<ServiceProgressUpdate>? progress = null,
         CancellationToken cancellationToken = default)
     {
         var provider = ResolveProvider(providerName);
@@ -541,17 +607,21 @@ public sealed class ComposeEngine : IComposeEngine
             if (spec is null)
             {
                 results.Add(new ServiceOperationResult(service.Name, "failed", Error: error));
+                Report(progress, service.Name, "building", "failed", error);
                 continue;
             }
 
+            Report(progress, service.Name, "building", ServiceProgressUpdate.InProgress);
             try
             {
                 await provider.BuildImageAsync(spec, cancellationToken).ConfigureAwait(false);
                 results.Add(new ServiceOperationResult(service.Name, "built"));
+                Report(progress, service.Name, "building", "built");
             }
             catch (ProviderException ex)
             {
                 results.Add(new ServiceOperationResult(service.Name, "failed", Error: ex.Message));
+                Report(progress, service.Name, "building", "failed", ex.Message);
             }
         }
 
@@ -988,9 +1058,11 @@ public sealed class ComposeEngine : IComposeEngine
         ComposeFile? file,
         string? providerName,
         IReadOnlyList<string>? services,
+        string phase,
         string successStatus,
         bool reverseOrder,
         Func<IContainerProvider, string, CancellationToken, Task> action,
+        IProgress<ServiceProgressUpdate>? progress,
         CancellationToken cancellationToken)
     {
         var provider = ResolveProvider(providerName);
@@ -1012,14 +1084,17 @@ public sealed class ComposeEngine : IComposeEngine
             cancellationToken.ThrowIfCancellationRequested();
             var serviceName = container.Service ?? container.Name;
 
+            Report(progress, serviceName, phase, ServiceProgressUpdate.InProgress, containerId: container.Id);
             try
             {
                 await action(provider, container.Name, cancellationToken).ConfigureAwait(false);
                 results.Add(new ServiceOperationResult(serviceName, successStatus, container.Id));
+                Report(progress, serviceName, phase, successStatus, containerId: container.Id);
             }
             catch (ProviderException ex)
             {
                 results.Add(new ServiceOperationResult(serviceName, "failed", container.Id, ex.Message));
+                Report(progress, serviceName, phase, "failed", ex.Message, container.Id);
             }
         }
 

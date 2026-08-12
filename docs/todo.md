@@ -29,7 +29,6 @@ Intentionally deferred work. **Milestones and sequencing** live in [roadmap.md](
 
 | Item | Priority | Size | Milestone | Issue | Notes |
 | --- | --- | --- | --- | --- | --- |
-| Stream per-service progress for unary RPCs (`Up`/`Down`/`Ps`/`Start`/`Stop`/`Restart`/`Pull`/`Build`) | **P1** | **L** | **0.2** | | Prefer before GUI / public API freeze the proto |
 | `config --resolve-image-digests` | **P2** | **M** | Later | | Needs registry access; `config` is offline |
 | `logs --follow` global ordering (bounded reorder / watermark) | **P2** | **M** | Later | | Non-follow dumps already sort by timestamp |
 | Networks/volumes: IPAM, `ipv4_address`, `driver_opts`, explicit resource `name:` | **P2** | **M** | Later | | Only `driver` / `external` today |
@@ -44,7 +43,7 @@ Intentionally deferred work. **Milestones and sequencing** live in [roadmap.md](
 
 | Item | Priority | Size | Milestone | Issue | Notes |
 | --- | --- | --- | --- | --- | --- |
-| Publish `Wslcc.Api` wrapping `Wslcc.Client` | **P2** | **M** | Later | | After gRPC surface settles (progress streaming) |
+| Publish `Wslcc.Api` wrapping `Wslcc.Client` | **P2** | **M** | Later | | gRPC progress streaming is in place; freeze surface before publishing |
 
 ## GUI
 

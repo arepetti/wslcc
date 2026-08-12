@@ -69,13 +69,13 @@ public sealed class ComposeUpCommand : AsyncCommand<ComposeUpCommand.Settings>
         try
         {
             using var client = new WslccClient(settings.Host);
-            var response = await AnsiConsole.Status()
-                .StartAsync("Starting services...", async _ => await client.UpAsync(request, cancellationToken))
+            AnsiConsole.MarkupLine("[bold]Starting services…[/]");
+            var response = await client.UpAsync(request, ProgressDisplay.Create(), cancellationToken)
                 .ConfigureAwait(false);
 
             AnsiConsole.MarkupLine($"[bold]Project:[/] {response.ProjectName.EscapeMarkup()}");
 
-            var failed = PrintResults(response);
+            var failed = ServiceResults.FailedCount(response.Results);
             if (failed > 0 || settings.Detach)
             {
                 return failed > 0 ? 1 : 0;
@@ -87,26 +87,6 @@ public sealed class ComposeUpCommand : AsyncCommand<ComposeUpCommand.Settings>
         {
             return RpcErrors.Report(ex);
         }
-    }
-
-    private static int PrintResults(UpResponse response)
-    {
-        var failed = 0;
-        foreach (var result in response.Results)
-        {
-            if (string.Equals(result.Status, "failed", StringComparison.OrdinalIgnoreCase))
-            {
-                failed++;
-                AnsiConsole.MarkupLine($"  [red]x[/] {result.Service.EscapeMarkup()}: {result.Error.EscapeMarkup()}");
-            }
-            else
-            {
-                var id = RpcErrors.ShortId(result.ContainerId);
-                AnsiConsole.MarkupLine($"  [green]+[/] {result.Service.EscapeMarkup()} [grey]{id.EscapeMarkup()}[/] ({result.Status.EscapeMarkup()})");
-            }
-        }
-
-        return failed;
     }
 
     /// <summary>
@@ -184,7 +164,7 @@ public sealed class ComposeUpCommand : AsyncCommand<ComposeUpCommand.Settings>
 
         try
         {
-            var response = await client.StopAsync(stopRequest, stopCts.Token).ConfigureAwait(false);
+            var response = await client.StopAsync(stopRequest, progress: null, stopCts.Token).ConfigureAwait(false);
             foreach (var result in response.Results)
             {
                 if (string.Equals(result.Status, "failed", StringComparison.OrdinalIgnoreCase))

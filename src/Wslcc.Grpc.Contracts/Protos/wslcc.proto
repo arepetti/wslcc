@@ -15,19 +15,89 @@ service Wslcc {
   // Requests a graceful shutdown of the daemon (used by `wslcc daemon stop`).
   rpc Shutdown (ShutdownRequest) returns (ShutdownResponse);
 
-  // Compose lifecycle.
-  rpc Up (UpRequest) returns (UpResponse);
-  rpc Down (DownRequest) returns (DownResponse);
-  rpc Ps (PsRequest) returns (PsResponse);
-  rpc Start (StartRequest) returns (StartResponse);
-  rpc Stop (StopRequest) returns (StopResponse);
-  rpc Restart (RestartRequest) returns (RestartResponse);
-  rpc Pull (PullRequest) returns (PullResponse);
-  rpc Build (BuildRequest) returns (BuildResponse);
+  // Compose lifecycle. Each call is server-streaming: zero or more ServiceProgress events, then exactly
+  // one completed response (or an RPC error). Progress lets the CLI/GUI show per-service status while
+  // long operations (pull/build/up/…) run instead of blocking on a unary reply.
+  rpc Up (UpRequest) returns (stream UpEvent);
+  rpc Down (DownRequest) returns (stream DownEvent);
+  rpc Ps (PsRequest) returns (stream PsEvent);
+  rpc Start (StartRequest) returns (stream StartEvent);
+  rpc Stop (StopRequest) returns (stream StopEvent);
+  rpc Restart (RestartRequest) returns (stream RestartEvent);
+  rpc Pull (PullRequest) returns (stream PullEvent);
+  rpc Build (BuildRequest) returns (stream BuildEvent);
 
   // Server-streaming: yields log lines as they are produced. When 'follow' is set the stream stays
   // open until the client cancels the call (e.g. Ctrl+C) or every container stops.
   rpc Logs (LogsRequest) returns (stream LogLine);
+}
+
+// Per-service progress for lifecycle RPCs.
+message ServiceProgress {
+  string service = 1;
+  // What the engine is doing: pulling, building, creating, starting, stopping, restarting,
+  // removing, waiting, listing, …
+  string phase = 2;
+  // "in_progress" while work runs; otherwise a terminal status (started, pulled, failed, …).
+  string status = 3;
+  string message = 4;
+  string container_id = 5;
+}
+
+message UpEvent {
+  oneof payload {
+    ServiceProgress progress = 1;
+    UpResponse completed = 2;
+  }
+}
+
+message DownEvent {
+  oneof payload {
+    ServiceProgress progress = 1;
+    DownResponse completed = 2;
+  }
+}
+
+message PsEvent {
+  oneof payload {
+    ServiceProgress progress = 1;
+    PsResponse completed = 2;
+  }
+}
+
+message StartEvent {
+  oneof payload {
+    ServiceProgress progress = 1;
+    StartResponse completed = 2;
+  }
+}
+
+message StopEvent {
+  oneof payload {
+    ServiceProgress progress = 1;
+    StopResponse completed = 2;
+  }
+}
+
+message RestartEvent {
+  oneof payload {
+    ServiceProgress progress = 1;
+    RestartResponse completed = 2;
+  }
+}
+
+message PullEvent {
+  oneof payload {
+    ServiceProgress progress = 1;
+    PullResponse completed = 2;
+  }
+}
+
+message BuildEvent {
+  oneof payload {
+    ServiceProgress progress = 1;
+    BuildResponse completed = 2;
+  }
 }
 
 message PingRequest {}
