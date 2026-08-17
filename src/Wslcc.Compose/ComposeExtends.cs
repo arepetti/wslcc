@@ -8,6 +8,7 @@ namespace Wslcc.Compose;
 /// supported) and the child is merged over it with <see cref="ComposeMerge.MergeService"/>. Cycles are
 /// rejected, as is extending a service that declares a non-extendable (service-referencing) attribute.
 /// </summary>
+// Compose file — extends: a service inherits another service, in this file or another one.
 public static class ComposeExtends
 {
     // Attributes that reference other services/containers and therefore cannot be inherited via extends.
@@ -21,20 +22,34 @@ public static class ComposeExtends
     /// <paramref name="loadInterpolated"/> maps an absolute file path to that file's already-interpolated
     /// graph (used for cross-file <c>extends</c>).
     /// </summary>
+    /// <param name="filePath">Absolute path of the file whose services are resolved.</param>
+    /// <param name="loadInterpolated">Reads and interpolates the document at a given absolute path.</param>
+    /// <returns>
+    /// The document with <c>extends</c> resolved away, or the input unchanged when it declares no
+    /// <c>services:</c>.
+    /// </returns>
+    /// <exception cref="ArgumentException"><paramref name="filePath"/> is null, empty or whitespace.</exception>
+    /// <exception cref="ArgumentNullException"><paramref name="loadInterpolated"/> is <c>null</c>.</exception>
+    /// <exception cref="ComposeLoadException">
+    /// The <c>extends</c> is malformed, its target is missing, the chain is cyclic, or the base service
+    /// declares an attribute that cannot be inherited.
+    /// </exception>
     public static object? ResolveFile(string filePath, Func<string, object?> loadInterpolated)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(filePath);
+        ArgumentNullException.ThrowIfNull(loadInterpolated);
+
         var graph = loadInterpolated(filePath);
         var root = YamlGraph.AsMap(graph);
-        if (root is null || YamlGraph.AsMap(GetValue(root, "services")) is not { } services)
-        {
+        if (root is null)
             return graph;
-        }
+
+        if (YamlGraph.AsMap(GetValue(root, "services")) is not { } services)
+            return graph;
 
         var resolvedServices = new Dictionary<string, object?>(StringComparer.Ordinal);
         foreach (var name in services.Keys)
-        {
             resolvedServices[name] = ResolveService(filePath, name, loadInterpolated, new HashSet<(string, string)>());
-        }
 
         var newRoot = new Dictionary<string, object?>(root, StringComparer.Ordinal)
         {
@@ -51,27 +66,16 @@ public static class ComposeExtends
     {
         var key = (filePath, serviceName);
         if (!visiting.Add(key))
-        {
             throw new ComposeLoadException($"'extends' cycle detected at service '{serviceName}' in '{filePath}'.");
-        }
 
         try
         {
-            var services = YamlGraph.AsMap(GetValue(YamlGraph.AsMap(loadInterpolated(filePath)), "services"));
-            if (services is null || !services.TryGetValue(serviceName, out var raw))
-            {
-                throw new ComposeLoadException($"'extends' target service '{serviceName}' was not found in '{filePath}'.");
-            }
-
+            var raw = RequireService(filePath, serviceName, loadInterpolated);
             if (YamlGraph.AsMap(raw) is not { } serviceMap)
-            {
                 return raw;
-            }
 
-            if (!serviceMap.TryGetValue("extends", out var extendsNode) || extendsNode is null)
-            {
+            if (GetValue(serviceMap, "extends") is not { } extendsNode)
                 return serviceMap;
-            }
 
             var (baseService, baseFileRelative) = ParseExtends(extendsNode, serviceName, filePath);
             var baseFilePath = baseFileRelative is null
@@ -92,13 +96,27 @@ public static class ComposeExtends
         }
     }
 
+    /// <summary>Reads one service's raw node, rejecting a missing file section or a missing service.</summary>
+    private static object? RequireService(string filePath, string serviceName, Func<string, object?> loadInterpolated)
+    {
+        var services = YamlGraph.AsMap(GetValue(YamlGraph.AsMap(loadInterpolated(filePath)), "services"));
+        if (services is null)
+            throw MissingExtendsTarget(serviceName, filePath);
+
+        if (!services.TryGetValue(serviceName, out var raw))
+            throw MissingExtendsTarget(serviceName, filePath);
+
+        return raw;
+    }
+
+    private static ComposeLoadException MissingExtendsTarget(string serviceName, string filePath)
+        => new($"'extends' target service '{serviceName}' was not found in '{filePath}'.");
+
     /// <summary>Rejects extending a base service that declares an attribute referencing another service/container.</summary>
     private static void EnsureExtendable(object? resolvedBase, string serviceName, string filePath)
     {
         if (YamlGraph.AsMap(resolvedBase) is not { } map)
-        {
             return;
-        }
 
         foreach (var key in NonExtendableKeys)
         {
@@ -111,14 +129,21 @@ public static class ComposeExtends
 
         foreach (var key in ReferenceKeys)
         {
-            if (map.TryGetValue(key, out var value) && value is string s
-                && (s.StartsWith("service:", StringComparison.Ordinal) || s.StartsWith("container:", StringComparison.Ordinal)))
-            {
-                throw new ComposeLoadException(
-                    $"Service '{serviceName}' in '{filePath}' can't be extended because '{key}: {s}' references another container.");
-            }
+            if (GetValue(map, key) is not string value)
+                continue;
+
+            if (!ReferencesAnotherContainer(value))
+                continue;
+
+            throw new ComposeLoadException(
+                $"Service '{serviceName}' in '{filePath}' can't be extended because '{key}: {value}' references another container.");
         }
     }
+
+    /// <summary>Whether a <c>network_mode</c>-style value points at another service or container.</summary>
+    private static bool ReferencesAnotherContainer(string value)
+        => value.StartsWith("service:", StringComparison.Ordinal)
+            || value.StartsWith("container:", StringComparison.Ordinal);
 
     private static (string Service, string? File) ParseExtends(object? extendsNode, string serviceName, string filePath)
     {
@@ -127,10 +152,8 @@ public static class ComposeExtends
             case string s when s.Length > 0:
                 return (s, null);
             case Dictionary<string, object?> map:
-                if (GetValue(map, "service") is not string service || service.Length == 0)
-                {
+                if (GetValue(map, "service") is not string { Length: > 0 } service)
                     throw new ComposeLoadException($"'extends' on service '{serviceName}' in '{filePath}' must specify a 'service'.");
-                }
 
                 var file = GetValue(map, "file") as string;
                 return (service, string.IsNullOrEmpty(file) ? null : file);

@@ -14,25 +14,45 @@ namespace Wslcc.Compose;
 /// </list>
 /// Default/alternate/error words may themselves reference variables and are interpolated recursively.
 /// </summary>
+// Compose file — variable interpolation: ${VAR} in any scalar, with shell-style default/error forms.
 public sealed class VariableInterpolator
 {
     private readonly Func<string, string?> _lookup;
     private readonly List<string> _warnings;
 
+    /// <summary>Creates an interpolator over a variable source.</summary>
+    /// <param name="lookup">Returns a variable's value, or <c>null</c> when it is not set.</param>
+    /// <param name="warnings">
+    /// Collects warnings (such as an unset variable defaulting to a blank string). Pass a shared list to
+    /// aggregate warnings across interpolators; when <c>null</c>, a private list is used.
+    /// </param>
+    /// <exception cref="ArgumentNullException"><paramref name="lookup"/> is <c>null</c>.</exception>
     public VariableInterpolator(Func<string, string?> lookup, List<string>? warnings = null)
     {
-        _lookup = lookup ?? throw new ArgumentNullException(nameof(lookup));
+        ArgumentNullException.ThrowIfNull(lookup);
+
+        _lookup = lookup;
         _warnings = warnings ?? new List<string>();
     }
 
+    /// <summary>Warnings accumulated so far, in the order they were raised.</summary>
     public IReadOnlyList<string> Warnings => _warnings;
 
+    /// <summary>Substitutes every variable reference in a scalar value.</summary>
+    /// <param name="input">The value to interpolate; returned unchanged when it contains no <c>$</c>.</param>
+    /// <returns>The value with all references resolved.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="input"/> is <c>null</c>.</exception>
+    /// <exception cref="ComposeLoadException">
+    /// A reference is malformed (unclosed <c>${</c>, missing name, unknown operator), or a
+    /// <c>${VAR:?err}</c> variable is not set.
+    /// </exception>
     public string Interpolate(string input)
     {
-        if (string.IsNullOrEmpty(input) || input.IndexOf('$') < 0)
-        {
+        ArgumentNullException.ThrowIfNull(input);
+
+        var hasNoReference = string.IsNullOrEmpty(input) || input.IndexOf('$') < 0;
+        if (hasNoReference)
             return input;
-        }
 
         var sb = new StringBuilder(input.Length);
         var i = 0;
@@ -63,9 +83,7 @@ public sealed class VariableInterpolator
             {
                 var end = FindClosingBrace(input, i + 2);
                 if (end < 0)
-                {
                     throw new ComposeLoadException($"Invalid interpolation '{input.Substring(i)}': missing closing '}}'.");
-                }
 
                 var expr = input.Substring(i + 2, end - (i + 2));
                 sb.Append(EvaluateBraced(expr));
@@ -103,23 +121,17 @@ public sealed class VariableInterpolator
         }
 
         if (nameEnd == 0)
-        {
             throw new ComposeLoadException($"Invalid interpolation '${{{expr}}}': missing variable name.");
-        }
 
         var name = expr.Substring(0, nameEnd);
         var rest = expr.Substring(nameEnd);
         if (rest.Length == 0)
-        {
             return ResolvePlain(name);
-        }
 
         var treatEmptyAsUnset = rest[0] == ':';
         var opIndex = treatEmptyAsUnset ? 1 : 0;
         if (opIndex >= rest.Length)
-        {
             throw new ComposeLoadException($"Invalid interpolation '${{{expr}}}'.");
-        }
 
         var op = rest[opIndex];
         var word = rest.Substring(opIndex + 1);
@@ -134,9 +146,7 @@ public sealed class VariableInterpolator
                 return isSet ? Interpolate(word) : string.Empty;
             case '?':
                 if (isSet)
-                {
                     return value!;
-                }
 
                 throw new ComposeLoadException(word.Length > 0
                     ? $"Required variable '{name}' is not set: {Interpolate(word)}"
@@ -150,9 +160,7 @@ public sealed class VariableInterpolator
     {
         var value = _lookup(name);
         if (value is not null)
-        {
             return value;
-        }
 
         _warnings.Add($"The \"{name}\" variable is not set. Defaulting to a blank string.");
         return string.Empty;
@@ -165,7 +173,8 @@ public sealed class VariableInterpolator
         for (var k = contentStart; k < input.Length; k++)
         {
             var ch = input[k];
-            if (ch == '$' && k + 1 < input.Length && input[k + 1] == '{')
+            var opensNested = ch == '$' && k + 1 < input.Length && input[k + 1] == '{';
+            if (opensNested)
             {
                 depth++;
                 k++;
@@ -173,9 +182,7 @@ public sealed class VariableInterpolator
             else if (ch == '}')
             {
                 if (depth == 0)
-                {
                     return k;
-                }
 
                 depth--;
             }

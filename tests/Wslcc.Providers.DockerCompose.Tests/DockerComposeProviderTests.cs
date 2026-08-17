@@ -22,8 +22,6 @@ public sealed class DockerComposeProviderTests
         Assert.Equal("docker", info.Name);
         Assert.Equal("Docker", info.DisplayName);
         if (!info.IsAvailable)
-        {
-            Assert.False(string.IsNullOrEmpty(info.Details));
-        }
+    Assert.False(string.IsNullOrEmpty(info.Details));
     }
 }

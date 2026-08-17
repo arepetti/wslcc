@@ -53,13 +53,9 @@ public sealed class ComposePsCommand : AsyncCommand<ComposePsCommand.Settings>
 
             // When scoped to one project the Project column is redundant.
             if (scoped)
-            {
                 table.AddColumns("Name", "Service", "Image", "State", "Status", "Ports");
-            }
             else
-            {
                 table.AddColumns("Project", "Name", "Service", "Image", "State", "Status", "Ports");
-            }
 
             foreach (var c in response.Containers.OrderBy(c => c.Project).ThenBy(c => c.Service))
             {

@@ -18,9 +18,7 @@ public sealed class ColorInterceptor : ICommandInterceptor
     public void Intercept(CommandContext context, CommandSettings settings)
     {
         if (ShouldDisableColor(settings, Environment.GetEnvironmentVariable("NO_COLOR")))
-        {
-            AnsiConsole.Console.Profile.Capabilities.ColorSystem = ColorSystem.NoColors;
-        }
+    AnsiConsole.Console.Profile.Capabilities.ColorSystem = ColorSystem.NoColors;
     }
 
     public void InterceptResult(CommandContext context, CommandSettings settings, ref int result)

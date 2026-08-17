@@ -47,9 +47,7 @@ public sealed class DaemonUninstallCommand : AsyncCommand<GlobalSettings>
 
         AnsiConsole.MarkupLine($"[red]Failed to remove autostart[/] (exit code {deleteResult.ExitCode}).");
         if (detail.Length > 0)
-        {
-            AnsiConsole.MarkupLine(detail.Trim().EscapeMarkup());
-        }
+    AnsiConsole.MarkupLine(detail.Trim().EscapeMarkup());
 
         return 1;
     }

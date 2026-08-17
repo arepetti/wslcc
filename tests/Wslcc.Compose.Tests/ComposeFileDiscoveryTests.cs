@@ -34,9 +34,7 @@ public sealed class ComposeFileDiscoveryTests : IDisposable
     {
         var env = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var (key, value) in pairs)
-        {
-            env[key] = value;
-        }
+    env[key] = value;
 
         return env;
     }

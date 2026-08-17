@@ -12,22 +12,32 @@ namespace Wslcc.Compose;
 public static class ComposeHash
 {
     /// <summary>Returns <c>service name → hex SHA-256</c> for every service in the resolved document.</summary>
+    /// <param name="resolvedYaml">The fully-resolved, single-document Compose YAML.</param>
+    /// <returns>One lowercase hex digest per service; empty when the document declares no services.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="resolvedYaml"/> is <c>null</c>.</exception>
+    /// <exception cref="ComposeLoadException"><paramref name="resolvedYaml"/> is not valid YAML.</exception>
     public static IReadOnlyDictionary<string, string> ComputeServiceHashes(string resolvedYaml)
     {
+        ArgumentNullException.ThrowIfNull(resolvedYaml);
+
         var result = new Dictionary<string, string>(StringComparer.Ordinal);
 
-        if (YamlGraph.AsMap(YamlGraph.Deserialize(resolvedYaml)) is not { } root
-            || YamlGraph.AsMap(root.TryGetValue("services", out var s) ? s : null) is not { } services)
-        {
+        var services = TryGetServicesMap(resolvedYaml);
+        if (services is null)
             return result;
-        }
 
         foreach (var kvp in services)
-        {
             result[kvp.Key] = Hash(kvp.Value);
-        }
 
         return result;
+    }
+
+    private static Dictionary<string, object?>? TryGetServicesMap(string resolvedYaml)
+    {
+        if (YamlGraph.AsMap(YamlGraph.Deserialize(resolvedYaml)) is not { } root)
+            return null;
+
+        return YamlGraph.AsMap(root.TryGetValue("services", out var services) ? services : null);
     }
 
     private static string Hash(object? node)
@@ -45,9 +55,7 @@ public static class ComposeHash
             case Dictionary<string, object?> map:
                 var ordered = new Dictionary<string, object?>(StringComparer.Ordinal);
                 foreach (var key in map.Keys.OrderBy(k => k, StringComparer.Ordinal))
-                {
                     ordered[key] = Canonicalize(map[key]);
-                }
 
                 return ordered;
             case List<object?> list:

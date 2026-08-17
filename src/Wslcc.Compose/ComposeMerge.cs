@@ -10,6 +10,7 @@ namespace Wslcc.Compose;
 /// <item>Scalars are replaced.</item>
 /// </list>
 /// </summary>
+// Compose file — multi-file merge: later files override earlier ones, per attribute.
 public static class ComposeMerge
 {
     // environment/labels/etc. may be a map or a "KEY=VALUE" list; both merge by key.
@@ -31,17 +32,16 @@ public static class ComposeMerge
     };
 
     /// <summary>Merges two whole Compose documents (<paramref name="overrideDoc"/> wins).</summary>
+    /// <param name="baseDoc">The document being overridden (an earlier <c>-f</c> file).</param>
+    /// <param name="overrideDoc">The document layered on top (a later <c>-f</c> file).</param>
+    /// <returns>The merged document; either side is returned as-is when the other is not a mapping.</returns>
     public static object? Merge(object? baseDoc, object? overrideDoc)
     {
         if (YamlGraph.AsMap(baseDoc) is not { } baseMap)
-        {
             return overrideDoc ?? baseDoc;
-        }
 
         if (YamlGraph.AsMap(overrideDoc) is not { } overrideMap)
-        {
             return baseDoc;
-        }
 
         var result = new Dictionary<string, object?>(baseMap, StringComparer.Ordinal);
         foreach (var kvp in overrideMap)
@@ -59,17 +59,16 @@ public static class ComposeMerge
     }
 
     /// <summary>Merges two service definitions using the per-attribute rules (used by <c>extends</c> too).</summary>
+    /// <param name="baseService">The service being overridden (or extended from).</param>
+    /// <param name="overrideService">The service layered on top.</param>
+    /// <returns>The merged service; either side is returned as-is when the other is not a mapping.</returns>
     public static object? MergeService(object? baseService, object? overrideService)
     {
         if (YamlGraph.AsMap(baseService) is not { } baseMap)
-        {
             return overrideService ?? baseService;
-        }
 
         if (YamlGraph.AsMap(overrideService) is not { } overrideMap)
-        {
             return baseService;
-        }
 
         var result = new Dictionary<string, object?>(baseMap, StringComparer.Ordinal);
         foreach (var kvp in overrideMap)
@@ -85,31 +84,26 @@ public static class ComposeMerge
     private static object? MergeAttribute(string key, object? baseValue, object? overrideValue)
     {
         if (MergeByKeyAttributes.Contains(key))
-        {
             return MergeByKey(baseValue, overrideValue);
-        }
 
         if (ReplaceAttributes.Contains(key))
-        {
             return overrideValue;
-        }
 
         if (DualFormAttributes.Contains(key))
         {
-            return YamlGraph.AsMap(baseValue) is not null || YamlGraph.AsMap(overrideValue) is not null
+            var eitherSideIsMap = YamlGraph.AsMap(baseValue) is not null || YamlGraph.AsMap(overrideValue) is not null;
+            return eitherSideIsMap
                 ? MergeByKey(baseValue, overrideValue)
                 : AppendDedup(baseValue, overrideValue);
         }
 
-        if (YamlGraph.AsList(baseValue) is not null && YamlGraph.AsList(overrideValue) is not null)
-        {
+        var bothAreLists = YamlGraph.AsList(baseValue) is not null && YamlGraph.AsList(overrideValue) is not null;
+        if (bothAreLists)
             return AppendDedup(baseValue, overrideValue);
-        }
 
-        if (YamlGraph.AsMap(baseValue) is not null && YamlGraph.AsMap(overrideValue) is not null)
-        {
+        var bothAreMaps = YamlGraph.AsMap(baseValue) is not null && YamlGraph.AsMap(overrideValue) is not null;
+        if (bothAreMaps)
             return YamlGraph.DeepMerge(baseValue, overrideValue);
-        }
 
         return overrideValue;
     }
@@ -121,14 +115,14 @@ public static class ComposeMerge
             ? new Dictionary<string, object?>(baseMap, StringComparer.Ordinal)
             : new Dictionary<string, object?>(StringComparer.Ordinal);
 
-        if (YamlGraph.AsMap(overrideNode) is { } overrideMap)
+        if (YamlGraph.AsMap(overrideNode) is not { } overrideMap)
+            return result;
+
+        foreach (var kvp in overrideMap)
         {
-            foreach (var kvp in overrideMap)
-            {
-                result[kvp.Key] = result.TryGetValue(kvp.Key, out var existing)
-                    ? mergeEntry(existing, kvp.Value)
-                    : kvp.Value;
-            }
+            result[kvp.Key] = result.TryGetValue(kvp.Key, out var existing)
+                ? mergeEntry(existing, kvp.Value)
+                : kvp.Value;
         }
 
         return result;
@@ -139,9 +133,7 @@ public static class ComposeMerge
     {
         var result = ToKeyValueMap(baseValue);
         foreach (var kvp in ToKeyValueMap(overrideValue))
-        {
             result[kvp.Key] = kvp.Value;
-        }
 
         return result;
     }
@@ -152,28 +144,22 @@ public static class ComposeMerge
         if (YamlGraph.AsMap(value) is { } map)
         {
             foreach (var kvp in map)
-            {
                 result[kvp.Key] = kvp.Value;
-            }
 
             return result;
         }
 
-        if (YamlGraph.AsList(value) is { } list)
+        if (YamlGraph.AsList(value) is not { } list)
+            return result;
+
+        foreach (var item in list)
         {
-            foreach (var item in list)
-            {
-                var text = Convert.ToString(item) ?? string.Empty;
-                var eq = text.IndexOf('=');
-                if (eq < 0)
-                {
-                    result[text] = null;
-                }
-                else
-                {
-                    result[text.Substring(0, eq)] = text.Substring(eq + 1);
-                }
-            }
+            var text = Convert.ToString(item) ?? string.Empty;
+            var eq = text.IndexOf('=');
+            if (eq < 0)
+                result[text] = null;
+            else
+                result[text.Substring(0, eq)] = text.Substring(eq + 1);
         }
 
         return result;
@@ -189,9 +175,7 @@ public static class ComposeMerge
         {
             var canonical = item is string s ? s : YamlGraph.Serialize(item);
             if (seen.Add(canonical))
-            {
                 result.Add(item);
-            }
         }
 
         return result;

@@ -12,6 +12,8 @@ namespace Wslcc.Abstractions;
 /// </param>
 /// <param name="Message">Optional detail (typically an error message when <paramref name="Status"/> is failed).</param>
 /// <param name="ContainerId">Container id when known.</param>
+/// <exception cref="ArgumentNullException"><paramref name="Service"/> is <c>null</c>.</exception>
+/// <exception cref="ArgumentException"><paramref name="Phase"/> or <paramref name="Status"/> is null, empty or whitespace.</exception>
 public sealed record ServiceProgressUpdate(
     string Service,
     string Phase,
@@ -19,7 +21,39 @@ public sealed record ServiceProgressUpdate(
     string? Message = null,
     string? ContainerId = null)
 {
+    /// <summary>The <see cref="Status"/> value that marks an update as non-terminal.</summary>
     public const string InProgress = "in_progress";
 
+    /// <summary>
+    /// Compose service name, or an empty string for a project-level update (such as a <c>ps</c> listing)
+    /// that belongs to no single service.
+    /// </summary>
+    public string Service { get; init; } = RequireService(Service);
+
+    /// <summary>What the engine is doing (<c>pulling</c>, <c>building</c>, <c>creating</c>, …).</summary>
+    public string Phase { get; init; } = RequirePhase(Phase);
+
+    /// <summary><c>in_progress</c> while work is underway, otherwise a terminal status.</summary>
+    public string Status { get; init; } = RequireStatus(Status);
+
+    /// <summary>Whether this update reports work still underway rather than a final outcome.</summary>
     public bool IsInProgress => string.Equals(Status, InProgress, StringComparison.OrdinalIgnoreCase);
+
+    private static string RequireService(string service)
+    {
+        ArgumentNullException.ThrowIfNull(service);
+        return service;
+    }
+
+    private static string RequirePhase(string phase)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(phase);
+        return phase;
+    }
+
+    private static string RequireStatus(string status)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(status);
+        return status;
+    }
 }

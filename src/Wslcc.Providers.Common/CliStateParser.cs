@@ -10,8 +10,17 @@ namespace Wslcc.Providers.Common;
 /// </summary>
 public static class CliStateParser
 {
+    /// <summary>Reads the first non-empty output line into a runtime state.</summary>
+    /// <param name="output">Raw output of the inspect invocation.</param>
+    /// <returns>
+    /// The parsed state. Missing or unrecognized fields degrade gracefully: an empty status, a health of
+    /// <see cref="HealthStatus.None"/>, and a <c>null</c> exit code.
+    /// </returns>
+    /// <exception cref="ArgumentNullException"><paramref name="output"/> is <c>null</c>.</exception>
     public static ContainerRuntimeState Parse(string output)
     {
+        ArgumentNullException.ThrowIfNull(output);
+
         var line = FirstNonEmptyLine(output);
         var fields = line.Split(CliCommandBuilder.FieldSeparator);
 
@@ -38,9 +47,7 @@ public static class CliStateParser
         {
             var line = raw.Trim();
             if (line.Length > 0)
-            {
                 return line;
-            }
         }
 
         return string.Empty;

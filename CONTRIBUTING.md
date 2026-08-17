@@ -27,6 +27,7 @@ App binaries land side-by-side in `src\out\` (see [`Directory.Build.props`](Dire
 
 - Central Package Management: add/adjust NuGet versions in [`Directory.Packages.props`](Directory.Packages.props); reference packages without a `Version`.
 - Shared build settings live in [`Directory.Build.props`](Directory.Build.props) (including `Nullable` enable). Style preferences are suggested via [`.editorconfig`](.editorconfig) (file-scoped namespaces, 4-space indent, etc.) at suggestion severity — they are **not** enforced in CI today (`TreatWarningsAsErrors` is off; there is no `dotnet format --verify` step).
+- **C# readability conventions** that go beyond defaults (brace omission, `is null`, short methods, XML docs, Compose-file citations) are documented in [`docs/style-guide.md`](docs/style-guide.md) — follow that in reviews.
 - Every project targets `net10.0` (no `netstandard2.0` compatibility is maintained).
 - The WSL SDK path is isolated behind the `WSLC_SDK` compile constant so the solution builds without the preview `Microsoft.WSL.Containers` package. Prefer that seam over sprinkling `#if` throughout.
 - Comments should explain intent/trade-offs, not restate the code.

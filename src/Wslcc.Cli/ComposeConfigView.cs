@@ -48,9 +48,7 @@ public static class ComposeConfigView
         foreach (var kvp in root)
         {
             if (!string.Equals(kvp.Key, "name", StringComparison.Ordinal))
-            {
-                withName[kvp.Key] = kvp.Value;
-            }
+    withName[kvp.Key] = kvp.Value;
         }
 
         return asJson ? YamlGraph.SerializeJson(withName) : YamlGraph.Serialize(withName);

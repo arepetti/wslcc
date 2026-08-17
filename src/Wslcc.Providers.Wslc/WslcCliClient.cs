@@ -45,9 +45,7 @@ public sealed class WslcCliClient : IWslcClient
     {
         var text = output.Trim();
         if (text.Length == 0)
-        {
-            return "unknown";
-        }
+    return "unknown";
 
         // Typical output looks like "wslc 1.2.3" or similar; keep the first line.
         var firstLine = text.Split('\n')[0].Trim();

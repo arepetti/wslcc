@@ -17,7 +17,9 @@ public sealed class WslccClient : IDisposable
 
     public WslccClient(WslccEndpoint endpoint)
     {
-        Endpoint = endpoint ?? throw new ArgumentNullException(nameof(endpoint));
+        ArgumentNullException.ThrowIfNull(endpoint);
+
+        Endpoint = endpoint;
         _channel = CreateChannel(endpoint);
         _client = new global::Wslcc.Grpc.Contracts.Wslcc.WslccClient(_channel);
     }
@@ -51,94 +53,135 @@ public sealed class WslccClient : IDisposable
         UpRequest request,
         IProgress<ServiceProgress>? progress = null,
         CancellationToken cancellationToken = default)
-        => CollectAsync(
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        return CollectAsync(
             () => _client.Up(request, cancellationToken: cancellationToken),
             ev => ev.PayloadCase == UpEvent.PayloadOneofCase.Progress ? ev.Progress : null,
             ev => ev.PayloadCase == UpEvent.PayloadOneofCase.Completed ? ev.Completed : null,
             progress,
             cancellationToken);
+    }
 
     public Task<DownResponse> DownAsync(
         DownRequest request,
         IProgress<ServiceProgress>? progress = null,
         CancellationToken cancellationToken = default)
-        => CollectAsync(
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        return CollectAsync(
             () => _client.Down(request, cancellationToken: cancellationToken),
             ev => ev.PayloadCase == DownEvent.PayloadOneofCase.Progress ? ev.Progress : null,
             ev => ev.PayloadCase == DownEvent.PayloadOneofCase.Completed ? ev.Completed : null,
             progress,
             cancellationToken);
+    }
 
     public Task<PsResponse> PsAsync(
         PsRequest request,
         IProgress<ServiceProgress>? progress = null,
         CancellationToken cancellationToken = default)
-        => CollectAsync(
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        return CollectAsync(
             () => _client.Ps(request, cancellationToken: cancellationToken),
             ev => ev.PayloadCase == PsEvent.PayloadOneofCase.Progress ? ev.Progress : null,
             ev => ev.PayloadCase == PsEvent.PayloadOneofCase.Completed ? ev.Completed : null,
             progress,
             cancellationToken);
+    }
 
     public Task<StartResponse> StartAsync(
         StartRequest request,
         IProgress<ServiceProgress>? progress = null,
         CancellationToken cancellationToken = default)
-        => CollectAsync(
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        return CollectAsync(
             () => _client.Start(request, cancellationToken: cancellationToken),
             ev => ev.PayloadCase == StartEvent.PayloadOneofCase.Progress ? ev.Progress : null,
             ev => ev.PayloadCase == StartEvent.PayloadOneofCase.Completed ? ev.Completed : null,
             progress,
             cancellationToken);
+    }
 
     public Task<StopResponse> StopAsync(
         StopRequest request,
         IProgress<ServiceProgress>? progress = null,
         CancellationToken cancellationToken = default)
-        => CollectAsync(
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        return CollectAsync(
             () => _client.Stop(request, cancellationToken: cancellationToken),
             ev => ev.PayloadCase == StopEvent.PayloadOneofCase.Progress ? ev.Progress : null,
             ev => ev.PayloadCase == StopEvent.PayloadOneofCase.Completed ? ev.Completed : null,
             progress,
             cancellationToken);
+    }
 
     public Task<RestartResponse> RestartAsync(
         RestartRequest request,
         IProgress<ServiceProgress>? progress = null,
         CancellationToken cancellationToken = default)
-        => CollectAsync(
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        return CollectAsync(
             () => _client.Restart(request, cancellationToken: cancellationToken),
             ev => ev.PayloadCase == RestartEvent.PayloadOneofCase.Progress ? ev.Progress : null,
             ev => ev.PayloadCase == RestartEvent.PayloadOneofCase.Completed ? ev.Completed : null,
             progress,
             cancellationToken);
+    }
 
     public Task<PullResponse> PullAsync(
         PullRequest request,
         IProgress<ServiceProgress>? progress = null,
         CancellationToken cancellationToken = default)
-        => CollectAsync(
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        return CollectAsync(
             () => _client.Pull(request, cancellationToken: cancellationToken),
             ev => ev.PayloadCase == PullEvent.PayloadOneofCase.Progress ? ev.Progress : null,
             ev => ev.PayloadCase == PullEvent.PayloadOneofCase.Completed ? ev.Completed : null,
             progress,
             cancellationToken);
+    }
 
     public Task<BuildResponse> BuildAsync(
         BuildRequest request,
         IProgress<ServiceProgress>? progress = null,
         CancellationToken cancellationToken = default)
-        => CollectAsync(
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        return CollectAsync(
             () => _client.Build(request, cancellationToken: cancellationToken),
             ev => ev.PayloadCase == BuildEvent.PayloadOneofCase.Progress ? ev.Progress : null,
             ev => ev.PayloadCase == BuildEvent.PayloadOneofCase.Completed ? ev.Completed : null,
             progress,
             cancellationToken);
+    }
 
     /// <summary>Streams log lines from the server. Cancel <paramref name="cancellationToken"/> to stop following.</summary>
-    public async IAsyncEnumerable<LogLine> GetLogsAsync(
+    public IAsyncEnumerable<LogLine> GetLogsAsync(
         LogsRequest request,
-        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        return GetLogsCoreAsync(request, cancellationToken);
+    }
+
+    private async IAsyncEnumerable<LogLine> GetLogsCoreAsync(
+        LogsRequest request,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         using var call = _client.Logs(request, cancellationToken: cancellationToken);
         await foreach (var line in call.ResponseStream.ReadAllAsync(cancellationToken).ConfigureAwait(false))
@@ -169,9 +212,7 @@ public sealed class WslccClient : IDisposable
 
             var completed = completedOf(ev);
             if (completed is not null)
-            {
                 return completed;
-            }
         }
 
         throw new InvalidOperationException("Lifecycle stream ended without a completed response.");

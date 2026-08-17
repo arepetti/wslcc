@@ -96,14 +96,10 @@ public sealed class ComposeConfigCommand : Command<ComposeConfigCommand.Settings
 
         // --quiet: resolution above already validated the document; emit nothing.
         if (settings.Quiet)
-        {
             return 0;
-        }
 
         if (settings.Hash is not null)
-        {
             return PrintHashes(inputs.Yaml, settings.Hash);
-        }
 
         if (settings.Services || settings.Volumes || settings.Images || settings.ListProfiles)
         {
@@ -114,9 +110,7 @@ public sealed class ComposeConfigCommand : Command<ComposeConfigCommand.Settings
                 inputs.DeclaredProfiles;
 
             foreach (var name in names)
-            {
                 Console.Out.WriteLine(name);
-            }
 
             return 0;
         }
@@ -134,9 +128,7 @@ public sealed class ComposeConfigCommand : Command<ComposeConfigCommand.Settings
 
         Console.Out.Write(document);
         if (!document.EndsWith('\n'))
-        {
             Console.Out.WriteLine();
-        }
 
         return 0;
     }

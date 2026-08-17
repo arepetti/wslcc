@@ -17,8 +17,14 @@ public static class YamlGraph
     private static readonly ISerializer JsonSerializer = new SerializerBuilder().JsonCompatible().Build();
 
     /// <summary>Deserializes YAML into a normalized graph (mappings keyed by ordinal strings).</summary>
+    /// <param name="yaml">The document to read.</param>
+    /// <returns>The node graph, or <c>null</c> for an empty document.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="yaml"/> is <c>null</c>.</exception>
+    /// <exception cref="ComposeLoadException"><paramref name="yaml"/> is not valid YAML.</exception>
     public static object? Deserialize(string yaml)
     {
+        ArgumentNullException.ThrowIfNull(yaml);
+
         try
         {
             return Normalize(Deserializer.Deserialize<object?>(yaml));
@@ -29,6 +35,9 @@ public static class YamlGraph
         }
     }
 
+    /// <summary>Serializes the graph back to YAML; a <c>null</c> graph becomes an empty document.</summary>
+    /// <param name="graph">The node graph to write.</param>
+    /// <returns>The YAML text.</returns>
     public static string Serialize(object? graph) => Serializer.Serialize(graph ?? new Dictionary<string, object?>());
 
     /// <summary>
@@ -36,10 +45,18 @@ public static class YamlGraph
     /// YAML scalar types), so this is a JSON mirror of the resolved document rather than a fully
     /// type-inferred model.
     /// </summary>
+    /// <param name="graph">The node graph to write.</param>
+    /// <returns>The JSON text.</returns>
     public static string SerializeJson(object? graph) => JsonSerializer.Serialize(graph ?? new Dictionary<string, object?>());
 
+    /// <summary>The node as a mapping, or <c>null</c> when it is a sequence, a scalar or absent.</summary>
+    /// <param name="node">The node to inspect.</param>
+    /// <returns>The mapping, or <c>null</c>.</returns>
     public static Dictionary<string, object?>? AsMap(object? node) => node as Dictionary<string, object?>;
 
+    /// <summary>The node as a sequence, or <c>null</c> when it is a mapping, a scalar or absent.</summary>
+    /// <param name="node">The node to inspect.</param>
+    /// <returns>The sequence, or <c>null</c>.</returns>
     public static List<object?>? AsList(object? node) => node as List<object?>;
 
     /// <summary>
@@ -47,40 +64,47 @@ public static class YamlGraph
     /// recursively; scalars and sequences from the override replace the base (a <c>null</c> override
     /// keeps the base). Inputs are not mutated.
     /// </summary>
+    /// <param name="baseNode">The node being overridden.</param>
+    /// <param name="overrideNode">The node layered on top.</param>
+    /// <returns>The merged node.</returns>
     public static object? DeepMerge(object? baseNode, object? overrideNode)
     {
         if (overrideNode is null)
-        {
             return baseNode;
-        }
 
-        if (AsMap(baseNode) is { } baseMap && AsMap(overrideNode) is { } overrideMap)
+        if (AsMap(baseNode) is not { } baseMap)
+            return overrideNode;
+
+        if (AsMap(overrideNode) is not { } overrideMap)
+            return overrideNode;
+
+        var result = new Dictionary<string, object?>(baseMap, StringComparer.Ordinal);
+        foreach (var kvp in overrideMap)
         {
-            var result = new Dictionary<string, object?>(baseMap, StringComparer.Ordinal);
-            foreach (var kvp in overrideMap)
-            {
-                result[kvp.Key] = result.TryGetValue(kvp.Key, out var existing)
-                    ? DeepMerge(existing, kvp.Value)
-                    : kvp.Value;
-            }
-
-            return result;
+            result[kvp.Key] = result.TryGetValue(kvp.Key, out var existing)
+                ? DeepMerge(existing, kvp.Value)
+                : kvp.Value;
         }
 
-        return overrideNode;
+        return result;
     }
 
     /// <summary>Recursively interpolates every scalar string in the graph (mapping keys are left as-is).</summary>
+    /// <param name="node">The node graph to interpolate.</param>
+    /// <param name="interpolator">Resolves the variable references found in scalars.</param>
+    /// <returns>A new graph with every scalar interpolated; the input is not mutated.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="interpolator"/> is <c>null</c>.</exception>
+    /// <exception cref="ComposeLoadException">A reference is malformed or a required variable is not set.</exception>
     public static object? Interpolate(object? node, VariableInterpolator interpolator)
     {
+        ArgumentNullException.ThrowIfNull(interpolator);
+
         switch (node)
         {
             case Dictionary<string, object?> map:
                 var newMap = new Dictionary<string, object?>(StringComparer.Ordinal);
                 foreach (var kvp in map)
-                {
                     newMap[kvp.Key] = Interpolate(kvp.Value, interpolator);
-                }
 
                 return newMap;
             case List<object?> list:
@@ -103,17 +127,13 @@ public static class YamlGraph
             case IDictionary<object, object?> rawMap:
                 var map = new Dictionary<string, object?>(StringComparer.Ordinal);
                 foreach (var kvp in rawMap)
-                {
                     map[Convert.ToString(kvp.Key) ?? string.Empty] = Normalize(kvp.Value);
-                }
 
                 return map;
             case System.Collections.IEnumerable enumerable:
                 var list = new List<object?>();
                 foreach (var item in enumerable)
-                {
                     list.Add(Normalize(item));
-                }
 
                 return list;
             default:

@@ -6,15 +6,27 @@ namespace Wslcc.Compose;
 /// removed, the (now-resolved) <c>profiles:</c> key is dropped from survivors, and <c>depends_on</c>
 /// references to removed services are pruned so ordering does not break.
 /// </summary>
+// Compose file — profiles: a service without profiles is always on; otherwise one must be active.
 public static class ComposeProfiles
 {
+    /// <summary>Removes the services whose profiles are not active and prunes references to them.</summary>
+    /// <param name="graph">The merged Compose document.</param>
+    /// <param name="activeProfiles">Profiles enabled for this invocation.</param>
+    /// <returns>
+    /// The filtered document, or the input unchanged when it declares no <c>services:</c>. The input is
+    /// not mutated.
+    /// </returns>
+    /// <exception cref="ArgumentNullException"><paramref name="activeProfiles"/> is <c>null</c>.</exception>
     public static object? Apply(object? graph, ISet<string> activeProfiles)
     {
+        ArgumentNullException.ThrowIfNull(activeProfiles);
+
         var root = YamlGraph.AsMap(graph);
-        if (root is null || YamlGraph.AsMap(GetValue(root, "services")) is not { } services)
-        {
+        if (root is null)
             return graph;
-        }
+
+        if (YamlGraph.AsMap(GetValue(root, "services")) is not { } services)
+            return graph;
 
         var kept = new Dictionary<string, object?>(StringComparer.Ordinal);
         var removed = new HashSet<string>(StringComparer.Ordinal);
@@ -30,9 +42,10 @@ public static class ComposeProfiles
                 continue;
             }
 
-            if (service is not null && service.ContainsKey("profiles"))
+            var declaresProfiles = service is not null && service.ContainsKey("profiles");
+            if (declaresProfiles)
             {
-                var copy = new Dictionary<string, object?>(service, StringComparer.Ordinal);
+                var copy = new Dictionary<string, object?>(service!, StringComparer.Ordinal);
                 copy.Remove("profiles");
                 kept[kvp.Key] = copy;
             }
@@ -43,28 +56,7 @@ public static class ComposeProfiles
         }
 
         if (removed.Count > 0)
-        {
-            foreach (var name in kept.Keys.ToList())
-            {
-                if (YamlGraph.AsMap(kept[name]) is not { } service || !service.TryGetValue("depends_on", out var dependsOn))
-                {
-                    continue;
-                }
-
-                var pruned = PruneDependsOn(dependsOn, removed);
-                var copy = new Dictionary<string, object?>(service, StringComparer.Ordinal);
-                if (pruned is null)
-                {
-                    copy.Remove("depends_on");
-                }
-                else
-                {
-                    copy["depends_on"] = pruned;
-                }
-
-                kept[name] = copy;
-            }
-        }
+            PruneReferencesToRemoved(kept, removed);
 
         return new Dictionary<string, object?>(root, StringComparer.Ordinal)
         {
@@ -72,18 +64,41 @@ public static class ComposeProfiles
         };
     }
 
+    /// <summary>Drops <c>depends_on</c> entries that name a service the profile filter removed.</summary>
+    private static void PruneReferencesToRemoved(Dictionary<string, object?> kept, HashSet<string> removed)
+    {
+        foreach (var name in kept.Keys.ToList())
+        {
+            if (YamlGraph.AsMap(kept[name]) is not { } service)
+                continue;
+
+            if (!service.TryGetValue("depends_on", out var dependsOn))
+                continue;
+
+            var pruned = PruneDependsOn(dependsOn, removed);
+            var copy = new Dictionary<string, object?>(service, StringComparer.Ordinal);
+            if (pruned is null)
+                copy.Remove("depends_on");
+            else
+                copy["depends_on"] = pruned;
+
+            kept[name] = copy;
+        }
+    }
+
     private static List<string> GetProfiles(Dictionary<string, object?>? service)
     {
         var result = new List<string>();
-        if (service is not null && YamlGraph.AsList(GetValue(service, "profiles")) is { } list)
+        if (service is null)
+            return result;
+
+        if (YamlGraph.AsList(GetValue(service, "profiles")) is not { } list)
+            return result;
+
+        foreach (var item in list)
         {
-            foreach (var item in list)
-            {
-                if (item is not null)
-                {
-                    result.Add(Convert.ToString(item) ?? string.Empty);
-                }
-            }
+            if (item is not null)
+                result.Add(Convert.ToString(item) ?? string.Empty);
         }
 
         return result;
@@ -101,9 +116,7 @@ public static class ComposeProfiles
                 foreach (var kvp in map)
                 {
                     if (!removed.Contains(kvp.Key))
-                    {
                         keptMap[kvp.Key] = kvp.Value;
-                    }
                 }
 
                 return keptMap.Count > 0 ? keptMap : null;

@@ -31,6 +31,11 @@ public sealed class ComposeLogsCommand : AsyncCommand<ComposeLogsCommand.Setting
         [CommandOption("--since <TIME>")]
         [Description("Only show logs since a duration (e.g. '10m', '1h30m') or an RFC3339 timestamp.")]
         public string? Since { get; set; }
+
+        public override ValidationResult Validate()
+            => Tail is < 0
+                ? ValidationResult.Error("--tail must be zero or greater.")
+                : base.Validate();
     }
 
     protected override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
@@ -59,9 +64,7 @@ public sealed class ComposeLogsCommand : AsyncCommand<ComposeLogsCommand.Setting
         };
         request.Services.AddRange(settings.Services);
         if (settings.Tail is { } tail)
-        {
             request.Tail = tail;
-        }
 
         // Ctrl+C should stop following gracefully (close the stream) rather than kill the process.
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -78,9 +81,7 @@ public sealed class ComposeLogsCommand : AsyncCommand<ComposeLogsCommand.Setting
             var any = await LogStreaming.RenderAsync(client, request, settings.Timestamps, cts.Token).ConfigureAwait(false);
 
             if (!any)
-            {
                 AnsiConsole.MarkupLine("[grey]No log output.[/]");
-            }
 
             return 0;
         }

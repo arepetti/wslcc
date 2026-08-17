@@ -60,9 +60,7 @@ internal static class DaemonClientHelper
     private static void DebugWrite(Exception ex)
     {
         if (Environment.GetEnvironmentVariable("WSLCC_DEBUG") == "1")
-        {
-            Console.Error.WriteLine(ex);
-        }
+    Console.Error.WriteLine(ex);
     }
 
     /// <summary>
@@ -75,9 +73,7 @@ internal static class DaemonClientHelper
         // Genuine user cancellation (Ctrl+C) must propagate; anything else during a best-effort probe
         // means "not reachable".
         if (userToken.IsCancellationRequested)
-        {
-            return false;
-        }
+    return false;
 
         return ex is RpcException { StatusCode: StatusCode.Cancelled } || IsConnectionError(ex);
     }

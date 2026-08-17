@@ -29,8 +29,9 @@ public sealed class WslccEndpoint
     {
         var value = string.IsNullOrWhiteSpace(host) ? DefaultHost : host!.Trim();
 
-        if (TryStripScheme(value, "npipe://", out var pipeRest) ||
-            TryStripScheme(value, "pipe://", out pipeRest))
+        var isNamedPipeScheme = TryStripScheme(value, "npipe://", out var pipeRest)
+            || TryStripScheme(value, "pipe://", out pipeRest);
+        if (isNamedPipeScheme)
         {
             var (server, name) = SplitPipe(pipeRest);
             return new WslccEndpoint
@@ -42,8 +43,9 @@ public sealed class WslccEndpoint
             };
         }
 
-        if (value.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
-            value.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+        var isHttp = value.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
+            || value.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
+        if (isHttp)
         {
             var uri = new Uri(value, UriKind.Absolute);
             return new WslccEndpoint
@@ -66,29 +68,25 @@ public sealed class WslccEndpoint
 
     private static bool TryStripScheme(string value, string scheme, out string rest)
     {
-        if (value.StartsWith(scheme, StringComparison.OrdinalIgnoreCase))
+        if (!value.StartsWith(scheme, StringComparison.OrdinalIgnoreCase))
         {
-            rest = value.Substring(scheme.Length);
-            return true;
+            rest = string.Empty;
+            return false;
         }
 
-        rest = string.Empty;
-        return false;
+        rest = value.Substring(scheme.Length);
+        return true;
     }
 
     private static (string Server, string Name) SplitPipe(string rest)
     {
         rest = rest.Trim('/');
         if (rest.Length == 0)
-        {
             return (".", DefaultPipeName);
-        }
 
         var slash = rest.IndexOf('/');
         if (slash < 0)
-        {
             return (".", rest);
-        }
 
         var server = rest.Substring(0, slash);
         var name = rest.Substring(slash + 1);

@@ -40,9 +40,7 @@ public sealed class WslccGrpcService : global::Wslcc.Grpc.Contracts.Wslcc.WslccB
 
         IReadOnlyList<ProviderInfo> infos;
         if (string.IsNullOrWhiteSpace(request.Provider))
-        {
-            infos = await _engine.GetProviderInfosAsync(context.CancellationToken).ConfigureAwait(false);
-        }
+    infos = await _engine.GetProviderInfosAsync(context.CancellationToken).ConfigureAwait(false);
         else
         {
             var single = await _engine.GetProviderInfoAsync(request.Provider, context.CancellationToken)
@@ -269,9 +267,7 @@ public sealed class WslccGrpcService : global::Wslcc.Grpc.Contracts.Wslcc.WslccB
             {
                 var message = new LogLine { Service = line.Service, Line = line.Line };
                 if (request.Timestamps && line.Timestamp is { } ts)
-                {
-                    message.Timestamp = ts.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss.fffffffZ", CultureInfo.InvariantCulture);
-                }
+    message.Timestamp = ts.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss.fffffffZ", CultureInfo.InvariantCulture);
 
                 await responseStream.WriteAsync(message).ConfigureAwait(false);
             }
@@ -322,9 +318,7 @@ public sealed class WslccGrpcService : global::Wslcc.Grpc.Contracts.Wslcc.WslccB
     {
         var file = Parse(yaml);
         if (file is null)
-        {
-            throw new RpcException(new Status(StatusCode.InvalidArgument, "No compose file content was provided."));
-        }
+    throw new RpcException(new Status(StatusCode.InvalidArgument, "No compose file content was provided."));
 
         return file;
     }
@@ -345,9 +339,7 @@ public sealed class WslccGrpcService : global::Wslcc.Grpc.Contracts.Wslcc.WslccB
     private static ComposeFile? Parse(string? yaml)
     {
         if (string.IsNullOrWhiteSpace(yaml))
-        {
-            return null;
-        }
+    return null;
 
         try
         {

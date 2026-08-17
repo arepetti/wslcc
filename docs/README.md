@@ -2,6 +2,8 @@
 
 Reading order by audience. Prefer the specialist page over copying the same paragraph into two places — CLI flags live in [cli-mapping.md](cli-mapping.md), daemon internals in [daemon.md](daemon.md), Compose file semantics in [compose-file.md](compose-file.md).
 
+Two Compose pages, two questions. **“What does this YAML mean?”** → [compose-file.md](compose-file.md), the format reference. **“Does WSLCC support it?”** → [compatibility.md](compatibility.md), which holds the support matrix and the migration checklist.
+
 ## New users
 
 1. [../README.md](../README.md) — install and quick start  
@@ -11,8 +13,8 @@ Reading order by audience. Prefer the specialist page over copying the same para
 
 ## Migrating from Docker Compose
 
-1. [compatibility.md](compatibility.md)  
-2. [compose-file.md](compose-file.md) — per-key “Applied?” table  
+1. [compatibility.md](compatibility.md) — support matrix for every key, plus what breaks  
+2. [compose-file.md](compose-file.md) — numbered Compose file format reference  
 3. [providers.md](providers.md) — `wslc` vs `docker` backends  
 
 ## Operators / daemon
@@ -24,9 +26,10 @@ Reading order by audience. Prefer the specialist page over copying the same para
 ## Contributors
 
 1. [../CONTRIBUTING.md](../CONTRIBUTING.md)  
-2. [architecture.md](architecture.md)  
-3. [todo.md](todo.md) — deferred work  
-4. [roadmap.md](roadmap.md) — milestones  
+2. [style-guide.md](style-guide.md) — C# conventions used in this repo  
+3. [architecture.md](architecture.md)  
+4. [todo.md](todo.md) — deferred work  
+5. [roadmap.md](roadmap.md) — milestones  
 
 ## Index
 
@@ -34,8 +37,9 @@ Reading order by audience. Prefer the specialist page over copying the same para
 | --- | --- |
 | [architecture.md](architecture.md) | Project layout, dependency direction, resolution flow |
 | [cli-mapping.md](cli-mapping.md) | Canonical CLI reference (`wslcc` commands and flags) |
-| [compose-file.md](compose-file.md) | Canonical Compose YAML reference |
-| [compatibility.md](compatibility.md) | Docker Compose differences / migration |
+| [compose-file.md](compose-file.md) | Compose YAML format reference — every key's syntax and meaning |
+| [compatibility.md](compatibility.md) | Support status for every key, plus Docker Compose differences / migration |
+| [style-guide.md](style-guide.md) | C# readability conventions (braces, null checks, method shape, XML docs) |
 | [daemon.md](daemon.md) | Canonical `wslccd` internals (config, RPCs, autostart) |
 | [providers.md](providers.md) | Provider backends |
 | [troubleshooting.md](troubleshooting.md) | Common failures |

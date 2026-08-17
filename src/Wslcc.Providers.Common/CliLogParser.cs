@@ -15,19 +15,27 @@ public static class CliLogParser
     /// <c>null</c> timestamp with the whole line as the message when no valid prefix is present (e.g. a
     /// continuation line the runtime did not stamp).
     /// </summary>
+    /// <param name="raw">One raw output line from a <c>logs --timestamps</c> invocation.</param>
+    /// <returns>The line's timestamp and message, or a <c>null</c> timestamp and the whole line.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="raw"/> is <c>null</c>.</exception>
     public static ContainerLogLine ParseTimestamped(string raw)
     {
-        var space = raw.IndexOf(' ');
-        if (space > 0
-            && DateTimeOffset.TryParse(
-                raw.AsSpan(0, space),
-                CultureInfo.InvariantCulture,
-                DateTimeStyles.RoundtripKind | DateTimeStyles.AssumeUniversal,
-                out var timestamp))
-        {
-            return new ContainerLogLine(timestamp, raw[(space + 1)..]);
-        }
+        ArgumentNullException.ThrowIfNull(raw);
 
-        return new ContainerLogLine(null, raw);
+        var space = raw.IndexOf(' ');
+        if (space <= 0)
+            return new ContainerLogLine(null, raw);
+
+        if (!TryParseTimestamp(raw.AsSpan(0, space), out var timestamp))
+            return new ContainerLogLine(null, raw);
+
+        return new ContainerLogLine(timestamp, raw[(space + 1)..]);
     }
+
+    private static bool TryParseTimestamp(ReadOnlySpan<char> value, out DateTimeOffset timestamp)
+        => DateTimeOffset.TryParse(
+            value,
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.RoundtripKind | DateTimeStyles.AssumeUniversal,
+            out timestamp);
 }

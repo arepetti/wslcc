@@ -195,9 +195,7 @@ public sealed class ComposeEngineTests
             LogCalls.Add((container, follow, tail, timestamps, since));
 
             if (!Logs.TryGetValue(container, out var lines))
-            {
-                yield break;
-            }
+    yield break;
 
             foreach (var line in lines)
             {

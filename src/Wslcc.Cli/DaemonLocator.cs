@@ -16,17 +16,13 @@ internal static class DaemonLocator
     {
         var fromEnv = Environment.GetEnvironmentVariable("WSLCCD_PATH");
         if (!string.IsNullOrEmpty(fromEnv) && File.Exists(fromEnv))
-        {
-            return fromEnv;
-        }
+    return fromEnv;
 
         var baseDir = AppContext.BaseDirectory;
 
         // Published/installed layout: wslccd sits next to wslcc.
         if (FindIn(baseDir) is { } sideBySide)
-        {
-            return sideBySide;
-        }
+    return sideBySide;
 
         // Dev artifacts layout: .../bin/Wslcc.Cli/<config> -> .../bin/Wslccd/<config>.
         var configDir = new DirectoryInfo(baseDir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
@@ -35,9 +31,7 @@ internal static class DaemonLocator
         {
             var sibling = Path.Combine(binRoot.FullName, "Wslccd", configDir.Name);
             if (FindIn(sibling) is { } fromArtifacts)
-            {
-                return fromArtifacts;
-            }
+    return fromArtifacts;
         }
 
         return null;
@@ -57,9 +51,7 @@ internal static class DaemonLocator
         {
             var wingetLink = Path.Combine(localAppData, "Microsoft", "WinGet", "Links", "wslccd.exe");
             if (File.Exists(wingetLink))
-            {
-                return wingetLink;
-            }
+    return wingetLink;
         }
 
         return Find();
@@ -71,9 +63,7 @@ internal static class DaemonLocator
         {
             var candidate = Path.Combine(directory, name);
             if (File.Exists(candidate))
-            {
-                return candidate;
-            }
+    return candidate;
         }
 
         return null;

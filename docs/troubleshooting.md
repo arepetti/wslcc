@@ -25,7 +25,7 @@ Background: [SECURITY.md](../SECURITY.md).
 
 - Check whether a dependency never becomes healthy: `wslcc compose ps -a` and `wslcc compose logs <service>`.
 - Fix or temporarily drop the health condition, or set `required: false` on that dependency.
-- After five minutes you should see a timeout error naming the dependency — see [compose-file.md#startup-order-and-health](compose-file.md#startup-order-and-health).
+- After five minutes you should see a timeout error naming the dependency — see [compose-file.md §4.8](compose-file.md#sec-4-8).
 
 ## No compose file found
 
@@ -50,11 +50,11 @@ No compose file found. Use -f <path> or run from a directory containing compose.
 service '…': 'ports' long map form is not supported; use short syntax …
 ```
 
-Only short syntax is accepted (`"8080:80"`, `./data:/data`). Rewrite map-form entries; details in [compose-file.md](compose-file.md#service-reference).
+Only short syntax is accepted (`"8080:80"`, `./data:/data`). Rewrite map-form entries — the short-syntax grammar is in [compose-file.md §4.5.1](compose-file.md#sec-4-5-1) / [§4.7.1](compose-file.md#sec-4-7-1), and the reason it is refused rather than ignored is in [compatibility.md](compatibility.md#what-partial-means-key-by-key).
 
 ## Wrong values from `.env`
 
-Without `--env-file` or `--project-directory`, the default `.env` is read from the **current working directory**, not automatically from the first `-f` file's folder. Example: `wslcc compose up -f apps/web/compose.yaml` from the repo root uses `./.env`, not `apps/web/.env`. Pass `--project-directory apps/web` (or `--env-file`) when you need the project-local file. See [compose-file.md#resolution-features](compose-file.md#resolution-features).
+Without `--env-file` or `--project-directory`, the default `.env` is read from the **current working directory**, not automatically from the first `-f` file's folder. Example: `wslcc compose up -f apps/web/compose.yaml` from the repo root uses `./.env`, not `apps/web/.env`. Pass `--project-directory apps/web` (or `--env-file`) when you need the project-local file. See [compose-file.md §2.3](compose-file.md#sec-2-3).
 
 ## Containers missing from `docker compose ps`
 

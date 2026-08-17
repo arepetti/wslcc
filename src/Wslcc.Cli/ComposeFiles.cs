@@ -65,9 +65,7 @@ internal static class ComposeFiles
 
         var files = ComposeFileDiscovery.Discover(settings.Files, projectDirectory ?? cwd, ProcessEnvironment());
         if (files.Count == 0)
-        {
-            return null;
-        }
+    return null;
 
         var result = ComposeLoader.Load(new ComposeLoadOptions
         {
@@ -82,9 +80,7 @@ internal static class ComposeFiles
 
         var defaultProjectName = new DirectoryInfo(result.ProjectDirectory).Name;
         if (string.IsNullOrEmpty(defaultProjectName))
-        {
-            defaultProjectName = "wslcc";
-        }
+    defaultProjectName = "wslcc";
 
         return new ComposeInputs(result.ResolvedYaml, defaultProjectName, result.ProjectDirectory, result.Warnings, result.DeclaredProfiles);
     }
@@ -95,9 +91,7 @@ internal static class ComposeFiles
         foreach (var key in new[] { "COMPOSE_FILE", "COMPOSE_PATH_SEPARATOR" })
         {
             if (Environment.GetEnvironmentVariable(key) is { } value)
-            {
-                env[key] = value;
-            }
+    env[key] = value;
         }
 
         return env;

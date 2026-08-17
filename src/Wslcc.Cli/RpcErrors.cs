@@ -9,18 +9,12 @@ internal static class RpcErrors
     public static int Report(RpcException ex)
     {
         if (Environment.GetEnvironmentVariable("WSLCC_DEBUG") == "1")
-        {
             AnsiConsole.WriteException(ex);
-        }
 
         if (DaemonClientHelper.IsConnectionError(ex))
-        {
             AnsiConsole.MarkupLine("[yellow]Daemon not reachable.[/] Start it with [bold]wslcc daemon start[/].");
-        }
         else
-        {
             AnsiConsole.MarkupLine($"[red]Error:[/] {ex.Status.Detail.EscapeMarkup()}");
-        }
 
         return 1;
     }

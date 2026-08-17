@@ -33,9 +33,7 @@ builder.WebHost.ConfigureKestrel(kestrel =>
     kestrel.ListenNamedPipe(options.PipeName, listen => listen.Protocols = HttpProtocols.Http2);
 
     if (options.Http.Enabled && Uri.TryCreate(options.Http.Url, UriKind.Absolute, out var httpUri))
-    {
         kestrel.ListenAnyIP(httpUri.Port, listen => listen.Protocols = HttpProtocols.Http2);
-    }
 });
 
 builder.Services.AddGrpc();
@@ -66,14 +64,10 @@ app.Run();
 static void RegisterProviders(IServiceCollection services, DaemonOptions options)
 {
     if (options.Providers.Wslc)
-    {
         services.AddSingleton<IContainerProvider, WslcProvider>();
-    }
 
     if (options.Providers.Docker)
-    {
         services.AddSingleton<IContainerProvider, DockerComposeProvider>();
-    }
 }
 
 static string ResolveDaemonVersion()

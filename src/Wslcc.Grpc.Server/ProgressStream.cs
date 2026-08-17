@@ -51,9 +51,7 @@ internal static class ProgressStream
         {
             // Surface engine failures that completed after the reader stopped, or ensure faults propagate.
             if (runTask.IsFaulted)
-            {
-                await runTask.ConfigureAwait(false);
-            }
+    await runTask.ConfigureAwait(false);
         }
     }
 

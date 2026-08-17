@@ -8,58 +8,83 @@ namespace Wslcc.Compose;
 /// the common short/long forms of the most-used keys. Full Compose specification fidelity is tracked
 /// in docs/todo.md.
 /// </summary>
+/// <remarks>
+/// The parser expects an already-resolved document: merging, <c>${VAR}</c> interpolation,
+/// <c>extends</c> and profile filtering are <see cref="ComposeLoader"/>'s job. An instance is cheap and
+/// holds only its YAML deserializer, so it can be reused across documents.
+/// </remarks>
+/// <example>
+/// Parsing a document and inspecting a service:
+/// <code>
+/// var parser = new ComposeFileParser();
+/// ComposeFile file = parser.Parse("""
+///     services:
+///       web:
+///         image: nginx:alpine
+///         command: echo hello
+///     """);
+///
+/// // file.Services["web"].Image   == "nginx:alpine"
+/// // file.Services["web"].Command == ["/bin/sh", "-c", "echo hello"]  (string form is shell form)
+/// </code>
+/// </example>
 public sealed class ComposeFileParser
 {
     private readonly IDeserializer _deserializer = new DeserializerBuilder().Build();
 
+    /// <summary>Reads and parses a Compose file from disk.</summary>
+    /// <param name="path">Path to the Compose document.</param>
+    /// <returns>The parsed file; an empty document yields an empty <see cref="ComposeFile"/>.</returns>
+    /// <exception cref="ArgumentException"><paramref name="path"/> is null, empty or whitespace.</exception>
+    /// <exception cref="ComposeLoadException">The document is invalid YAML or uses an unsupported form.</exception>
     public ComposeFile ParseFile(string path)
     {
-        if (string.IsNullOrWhiteSpace(path))
-        {
-            throw new ArgumentException("Path must be provided.", nameof(path));
-        }
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
 
         return Parse(File.ReadAllText(path), path);
     }
 
+    /// <summary>Parses an already-resolved Compose document (merged, interpolated, profile-filtered).</summary>
+    /// <param name="yaml">The Compose YAML.</param>
+    /// <param name="source">Optional origin of the document, for diagnostics.</param>
+    /// <returns>The parsed file; an empty or non-map document yields an empty <see cref="ComposeFile"/>.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="yaml"/> is <c>null</c>.</exception>
+    /// <exception cref="ComposeLoadException">
+    /// The document is invalid YAML, or a service uses a form the parser rejects (e.g. the long map
+    /// form of <c>ports</c>/<c>volumes</c>, or a malformed <c>env_file</c> entry).
+    /// </exception>
     public ComposeFile Parse(string yaml, string? source = null)
     {
-        var root = _deserializer.Deserialize<object?>(yaml);
-        var map = AsMap(root);
+        ArgumentNullException.ThrowIfNull(yaml);
+
+        var map = AsMap(_deserializer.Deserialize<object?>(yaml));
         var file = new ComposeFile();
 
         if (map is null)
-        {
             return file;
-        }
 
+        // Compose file — name: the project name declared in the document (a CLI -p flag still wins).
         file.Name = GetString(map, "name");
 
-        if (AsMap(GetValue(map, "services")) is { } services)
-        {
-            foreach (var kvp in services)
-            {
-                file.Services[kvp.Key] = ParseService(kvp.Key, kvp.Value);
-            }
-        }
-
-        if (AsMap(GetValue(map, "networks")) is { } networks)
-        {
-            foreach (var kvp in networks)
-            {
-                file.Networks[kvp.Key] = ParseNetwork(kvp.Key, kvp.Value);
-            }
-        }
-
-        if (AsMap(GetValue(map, "volumes")) is { } volumes)
-        {
-            foreach (var kvp in volumes)
-            {
-                file.Volumes[kvp.Key] = ParseVolume(kvp.Key, kvp.Value);
-            }
-        }
+        ParseSection(GetValue(map, "services"), file.Services, ParseService);
+        ParseSection(GetValue(map, "networks"), file.Networks, ParseNetwork);
+        ParseSection(GetValue(map, "volumes"), file.Volumes, ParseVolume);
 
         return file;
+    }
+
+    /// <summary>
+    /// Parses a top-level map section (<c>services</c> / <c>networks</c> / <c>volumes</c>) into
+    /// <paramref name="target"/>, keyed by the entry's name. A missing section — or one that is not a
+    /// map — leaves the target empty rather than failing the parse.
+    /// </summary>
+    private static void ParseSection<T>(object? value, IDictionary<string, T> target, Func<string, object?, T> parse)
+    {
+        if (AsMap(value) is not { } section)
+            return;
+
+        foreach (var kvp in section)
+            target[kvp.Key] = parse(kvp.Key, kvp.Value);
     }
 
     private static ServiceSpec ParseService(string name, object? value)
@@ -67,9 +92,7 @@ public sealed class ComposeFileParser
         var service = new ServiceSpec { Name = name };
         var map = AsMap(value);
         if (map is null)
-        {
             return service;
-        }
 
         service.Image = GetString(map, "image");
         service.ContainerName = GetString(map, "container_name");
@@ -92,6 +115,8 @@ public sealed class ComposeFileParser
         return service;
     }
 
+    // Compose file — command / entrypoint: a string is shell form (/bin/sh -c), a list is exec form.
+
     /// <summary>
     /// Reads <c>command:</c> / <c>entrypoint:</c> in Compose exec form (YAML list → argv tokens) or
     /// shell form (YAML scalar → <c>/bin/sh -c "&lt;string&gt;"</c>). A map value is rejected.
@@ -99,9 +124,7 @@ public sealed class ComposeFileParser
     private static IList<string> ToShellOrExecList(object? value, string attribute, string serviceName)
     {
         if (value is null)
-        {
             return new List<string>();
-        }
 
         if (AsMap(value) is not null)
         {
@@ -111,9 +134,7 @@ public sealed class ComposeFileParser
 
         // Scalars (including non-string YAML scalars) are Compose shell form.
         if (value is string s)
-        {
             return new List<string> { "/bin/sh", "-c", s };
-        }
 
         if (value is System.Collections.IEnumerable enumerable)
         {
@@ -121,9 +142,7 @@ public sealed class ComposeFileParser
             foreach (var item in enumerable)
             {
                 if (item is null)
-                {
                     continue;
-                }
 
                 tokens.Add(Convert.ToString(item) ?? string.Empty);
             }
@@ -134,6 +153,8 @@ public sealed class ComposeFileParser
         return new List<string> { "/bin/sh", "-c", Convert.ToString(value) ?? string.Empty };
     }
 
+    // Compose file — env_file: a string, a list of strings, or a list of { path, required } maps.
+
     /// <summary>
     /// Reads <c>env_file:</c> as a string, a list of strings, or a list of
     /// <c>{ path, required }</c> maps.
@@ -141,14 +162,10 @@ public sealed class ComposeFileParser
     private static IList<EnvFileSpec> ParseEnvFiles(object? value, string serviceName)
     {
         if (value is null)
-        {
             return new List<EnvFileSpec>();
-        }
 
         if (value is string path)
-        {
             return new List<EnvFileSpec> { new() { Path = path } };
-        }
 
         if (AsMap(value) is not null)
         {
@@ -159,40 +176,43 @@ public sealed class ComposeFileParser
         var result = new List<EnvFileSpec>();
         foreach (var item in AsList(value))
         {
-            if (item is null)
-            {
-                continue;
-            }
-
-            if (item is string s)
-            {
-                result.Add(new EnvFileSpec { Path = s });
-                continue;
-            }
-
-            if (AsMap(item) is { } map)
-            {
-                var entryPath = GetString(map, "path");
-                if (string.IsNullOrWhiteSpace(entryPath))
-                {
-                    throw new ComposeLoadException(
-                        $"service '{serviceName}': 'env_file' map entry requires a 'path'.");
-                }
-
-                result.Add(new EnvFileSpec
-                {
-                    Path = entryPath,
-                    Required = GetBool(map, "required", defaultValue: true),
-                });
-                continue;
-            }
-
-            throw new ComposeLoadException(
-                $"service '{serviceName}': 'env_file' entries must be strings or {{ path, required }} maps.");
+            if (item is not null)
+                result.Add(ParseEnvFileEntry(item, serviceName));
         }
 
         return result;
     }
+
+    /// <summary>
+    /// Reads one <c>env_file</c> list entry: a bare path, or a <c>{ path, required }</c> map. Entries
+    /// are required by default; <c>required: false</c> tolerates a missing file at run time.
+    /// </summary>
+    private static EnvFileSpec ParseEnvFileEntry(object item, string serviceName)
+    {
+        if (item is string path)
+            return new EnvFileSpec { Path = path };
+
+        if (AsMap(item) is not { } map)
+        {
+            throw new ComposeLoadException(
+                $"service '{serviceName}': 'env_file' entries must be strings or {{ path, required }} maps.");
+        }
+
+        var entryPath = GetString(map, "path");
+        if (string.IsNullOrWhiteSpace(entryPath))
+        {
+            throw new ComposeLoadException(
+                $"service '{serviceName}': 'env_file' map entry requires a 'path'.");
+        }
+
+        return new EnvFileSpec
+        {
+            Path = entryPath,
+            Required = GetBool(map, "required", defaultValue: true),
+        };
+    }
+
+    // Compose file — ports / volumes: the long map form is rejected; short syntax only.
 
     /// <summary>
     /// Reads a short-syntax string list (<c>ports</c>/<c>volumes</c>). A long-form map entry (or a
@@ -201,35 +221,38 @@ public sealed class ComposeFileParser
     /// </summary>
     private static IList<string> ToShortSyntaxList(object? value, string attribute, string serviceName)
     {
-        if (AsMap(value) is not null)
-        {
-            throw new ComposeLoadException(
-                $"service '{serviceName}': '{attribute}' long map form is not supported; use short syntax (e.g. \"8080:80\" or \"./src:/app\").");
-        }
+        RejectLongForm(value, attribute, serviceName);
 
         var result = new List<string>();
         foreach (var item in AsList(value))
         {
             if (item is null)
-            {
                 continue;
-            }
 
-            if (AsMap(item) is not null)
-            {
-                throw new ComposeLoadException(
-                    $"service '{serviceName}': '{attribute}' long map form is not supported; use short syntax (e.g. \"8080:80\" or \"./src:/app\").");
-            }
-
+            RejectLongForm(item, attribute, serviceName);
             result.Add(Convert.ToString(item) ?? string.Empty);
         }
 
         return result;
     }
 
+    /// <summary>Throws when a <c>ports</c>/<c>volumes</c> value (or entry) uses the unsupported long map form.</summary>
+    private static void RejectLongForm(object? value, string attribute, string serviceName)
+    {
+        if (AsMap(value) is not null)
+        {
+            throw new ComposeLoadException(
+                $"service '{serviceName}': '{attribute}' long map form is not supported; use short syntax (e.g. \"8080:80\" or \"./src:/app\").");
+        }
+    }
+
+    // Compose file — depends_on: wait conditions come from the long map form; a required failure
+    // aborts dependents.
+
     /// <summary>
     /// Reads <c>depends_on</c> in either the short list form (<c>[db]</c>, condition
     /// <c>service_started</c>) or the long map form (<c>db: { condition: service_healthy }</c>).
+    /// A nameless entry is dropped, like a dependency on a service the document does not define.
     /// </summary>
     private static IList<ServiceDependency> ParseDependsOn(object? value)
     {
@@ -239,6 +262,9 @@ public sealed class ComposeFileParser
         {
             foreach (var kvp in map)
             {
+                if (string.IsNullOrWhiteSpace(kvp.Key))
+                    continue;
+
                 var entry = AsMap(kvp.Value);
                 var condition = ParseCondition(entry is null ? null : GetString(entry, "condition"));
                 var required = entry is null || GetBool(entry, "required", defaultValue: true);
@@ -250,7 +276,8 @@ public sealed class ComposeFileParser
 
         foreach (var name in ToStringList(value))
         {
-            result.Add(new ServiceDependency(name));
+            if (!string.IsNullOrWhiteSpace(name))
+                result.Add(new ServiceDependency(name));
         }
 
         return result;
@@ -263,6 +290,8 @@ public sealed class ComposeFileParser
         _ => DependencyCondition.ServiceStarted,
     };
 
+    // Compose file — healthcheck: disable: true or test: ["NONE"] turns the image's healthcheck off.
+
     /// <summary>
     /// Reads a service's <c>healthcheck:</c>. <c>disable: true</c> or a <c>["NONE"]</c> test is captured
     /// as <see cref="HealthCheckSpec.Disabled"/>; the string short form is stored as a single test token.
@@ -270,9 +299,7 @@ public sealed class ComposeFileParser
     private static HealthCheckSpec? ParseHealthCheck(object? value)
     {
         if (AsMap(value) is not { } map)
-        {
             return null;
-        }
 
         var test = ToStringList(GetValue(map, "test"));
         var disabled = GetBool(map, "disable")
@@ -289,6 +316,7 @@ public sealed class ComposeFileParser
         };
     }
 
+    // Compose file — build: the string short form is the context; the map form adds dockerfile/target/args.
     private static BuildSpec? ParseBuild(object? value)
     {
         switch (value)
@@ -300,9 +328,7 @@ public sealed class ComposeFileParser
             default:
                 var map = AsMap(value);
                 if (map is null)
-                {
                     return null;
-                }
 
                 return new BuildSpec
                 {
@@ -314,6 +340,7 @@ public sealed class ComposeFileParser
         }
     }
 
+    // Compose file — networks / volumes (top level): external: true means "already exists, do not create".
     private static NetworkSpec ParseNetwork(string name, object? value)
     {
         var map = AsMap(value);
@@ -349,9 +376,7 @@ public sealed class ComposeFileParser
             case IDictionary<object, object?> raw:
                 var normalized = new Dictionary<string, object?>(StringComparer.Ordinal);
                 foreach (var kvp in raw)
-                {
                     normalized[Convert.ToString(kvp.Key) ?? string.Empty] = kvp.Value;
-                }
 
                 return normalized;
             default:
@@ -370,9 +395,7 @@ public sealed class ComposeFileParser
             case System.Collections.IEnumerable enumerable:
                 var list = new List<object?>();
                 foreach (var item in enumerable)
-                {
                     list.Add(item);
-                }
 
                 return list;
             default:
@@ -405,9 +428,7 @@ public sealed class ComposeFileParser
     private static IList<string> ToKeyList(object? value)
     {
         if (AsMap(value) is { } map)
-        {
             return map.Keys.ToList();
-        }
 
         return ToStringList(value);
     }
@@ -420,9 +441,7 @@ public sealed class ComposeFileParser
         if (AsMap(value) is { } map)
         {
             foreach (var kvp in map)
-            {
                 result[kvp.Key] = kvp.Value is null ? null : Convert.ToString(kvp.Value);
-            }
 
             return result;
         }
@@ -431,13 +450,9 @@ public sealed class ComposeFileParser
         {
             var index = item.IndexOf('=');
             if (index < 0)
-            {
                 result[item] = null;
-            }
             else
-            {
                 result[item.Substring(0, index)] = item.Substring(index + 1);
-            }
         }
 
         return result;
@@ -447,9 +462,7 @@ public sealed class ComposeFileParser
     {
         var result = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var kvp in ToKeyValues(value))
-        {
             result[kvp.Key] = kvp.Value ?? string.Empty;
-        }
 
         return result;
     }

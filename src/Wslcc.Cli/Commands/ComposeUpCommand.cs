@@ -77,9 +77,7 @@ public sealed class ComposeUpCommand : AsyncCommand<ComposeUpCommand.Settings>
 
             var failed = ServiceResults.FailedCount(response.Results);
             if (failed > 0 || settings.Detach)
-            {
                 return failed > 0 ? 1 : 0;
-            }
 
             return await AttachAsync(client, settings, inputs, cancellationToken).ConfigureAwait(false);
         }
@@ -135,9 +133,7 @@ public sealed class ComposeUpCommand : AsyncCommand<ComposeUpCommand.Settings>
 
         // The stream ended on its own (e.g. every container exited); nothing left to stop.
         if (!interrupted)
-        {
             return 0;
-        }
 
         return await StopAsync(client, settings, inputs, cancellationToken).ConfigureAwait(false);
     }
@@ -168,13 +164,9 @@ public sealed class ComposeUpCommand : AsyncCommand<ComposeUpCommand.Settings>
             foreach (var result in response.Results)
             {
                 if (string.Equals(result.Status, "failed", StringComparison.OrdinalIgnoreCase))
-                {
                     AnsiConsole.MarkupLine($"  [red]x[/] {result.Service.EscapeMarkup()}: {result.Error.EscapeMarkup()}");
-                }
                 else
-                {
                     AnsiConsole.MarkupLine($"  [green]-[/] {result.Service.EscapeMarkup()} ({result.Status.EscapeMarkup()})");
-                }
             }
 
             // 130 = terminated by Ctrl+C (128 + SIGINT), matching docker compose up.

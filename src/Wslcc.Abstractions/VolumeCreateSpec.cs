@@ -7,9 +7,15 @@ namespace Wslcc.Abstractions;
 /// </summary>
 public sealed class VolumeCreateSpec
 {
+    /// <summary>Volume name as the provider will see it, already project-prefixed (<see cref="WslccLabels.VolumeName"/>).</summary>
     public string Name { get; set; } = string.Empty;
 
+    /// <summary>Volume driver to use; <c>null</c> leaves the provider's default.</summary>
     public string? Driver { get; set; }
 
+    /// <summary>
+    /// Labels applied at creation time, including the <see cref="WslccLabels.Project"/> key that lets
+    /// <c>down --volumes</c> find the volumes wslcc created for the project.
+    /// </summary>
     public IDictionary<string, string> Labels { get; } = new Dictionary<string, string>(StringComparer.Ordinal);
 }

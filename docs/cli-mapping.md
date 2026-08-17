@@ -131,7 +131,7 @@ Does **not** stop an already-running daemon — use `wslcc daemon stop` for that
 
 `wslcc compose` manages a Compose application: one or more YAML files describing services, plus a project name that scopes their containers. Every command below shares the options in [Compose file and project options](#compose-file-and-project-options) and (except `config`) the connection options in [Project name and connection](#project-name-and-connection).
 
-For the YAML format itself — every key `wslcc` reads, exactly what it does with each, and what it doesn't yet support — see [compose-file.md](compose-file.md). That document is the authoritative reference for compose *files*; this one is the reference for the compose *commands*.
+For the YAML format itself — every key, its syntax, and what it means — see [compose-file.md](compose-file.md), the authoritative reference for compose *files*. For which of those keys `wslcc` actually honors, see the support matrix in [compatibility.md](compatibility.md). This document is the reference for the compose *commands*.
 
 ### Compose file and project options
 
@@ -139,9 +139,9 @@ These select **which** files make up the project and **which** of its services/p
 
 | Option | Description |
 | --- | --- |
-| `-f`, `--file <path>` | Compose file to load. **Repeatable** (`-f a.yaml -f b.yaml`) — later files override earlier ones using Compose's per-attribute merge rules (see [compose-file.md#resolution-features](compose-file.md#resolution-features)). |
+| `-f`, `--file <path>` | Compose file to load. **Repeatable** (`-f a.yaml -f b.yaml`) — later files override earlier ones using Compose's per-attribute merge rules (see [compose-file.md §2.2](compose-file.md#sec-2-2)). |
 | `-p`, `--project-name <name>` | Project name. See [Project name](#project-name-and-connection) for how the effective name is chosen. |
-| `--profile <name>` | Activate a profile. Repeatable. See [compose-file.md#profiles](compose-file.md#profiles). |
+| `--profile <name>` | Activate a profile. Repeatable. See [compose-file.md §4.10.5](compose-file.md#sec-4-10-5). |
 | `--env-file <path>` | Environment file used for `${VAR}` interpolation. Defaults to `.env` in the current working directory when present (or in `--project-directory` when that option is set). |
 | `--project-directory <path>` | Alternate project directory. Changes the default `.env` location, the base for relative `build.context`/bind-mount paths, and the default project name. Without it, build/bind/project-name resolution use the first `-f` file's directory, while the default `.env` still comes from the current working directory. |
 
@@ -357,7 +357,7 @@ wslcc compose config [--format <fmt>] [--services | --volumes | --images | --pro
 
 `--services`, `--volumes`, `--images`, `--profiles`, and `--hash` are mutually exclusive (pick at most one; with none, the full document is printed). The document — exactly what every other compose command would send to `wslccd`, plus the effective [project name](#project-name-and-connection) added as a leading `name:` — goes to `stdout` (or `-o`); resolver warnings (e.g. an unset interpolation variable) go to `stderr`, so `wslcc compose config > resolved.yaml` always captures a clean file. Because `extends` and profile-gated services are already resolved by this point, the output never contains an `extends:` key and only ever lists services active for the selected profiles. `--hash` is a WSLCC-specific SHA-256 of each service's canonical configuration (used by `up`'s [change detection](#change-detection)) — not Docker Compose's own config hash. `--resolve-image-digests` is not implemented, since `config` runs offline and pinning digests needs registry access.
 
-Full key-by-key detail on what gets resolved is in [compose-file.md#resolution-features](compose-file.md#resolution-features).
+Full key-by-key detail on what gets resolved is in [compose-file.md §2](compose-file.md#sec-2).
 
 ---
 
@@ -370,15 +370,15 @@ Command-level rules for `depends_on` ordering:
 - Naming a `[SERVICES]` argument the project doesn't define (or, when scoped only by `-p` with no compose file, one with no existing container) is rejected with `no such service: <name>` rather than silently ignored; `pull` and `build` reject unknown names against the compose file the same way.
 - Ordering needs the compose file. With only `-p <project>` (no `-f`/conventional file found), the daemon has no dependency graph for that project and falls back to listing order.
 
-`up` also waits on `depends_on` **conditions** (including a **5-minute** cap). YAML syntax, healthchecks, and `required:` are documented once in [compose-file.md#startup-order-and-health](compose-file.md#startup-order-and-health).
+`up` also waits on `depends_on` **conditions** (including a **5-minute** cap). YAML syntax, healthchecks, and `required:` are documented once in [compose-file.md §4.8](compose-file.md#sec-4-8).
 
 ## CHANGE DETECTION
 
-`up` leaves an unchanged, still-**running** container in place (config-hash match); `--pull`/`--build` force recreation. Semantics: [compose-file.md#change-detection-up](compose-file.md#change-detection-up).
+`up` leaves an unchanged, still-**running** container in place (config-hash match); `--pull`/`--build` force recreation. Semantics: [compose-file.md §10.2](compose-file.md#sec-10-2).
 
 ## NETWORKS AND VOLUMES
 
-`up` creates project networks/named volumes (plus an implicit default network) and attaches services by name; `down` removes networks and, with `-v`/`--volumes`, named volumes. `external: true` is never created or removed. Mount syntax and naming: [compose-file.md#networks-and-volumes](compose-file.md#networks-and-volumes).
+`up` creates project networks/named volumes (plus an implicit default network) and attaches services by name; `down` removes networks and, with `-v`/`--volumes`, named volumes. `external: true` is never created or removed. Mount syntax and naming: [compose-file.md §5](compose-file.md#sec-5) / [§6](compose-file.md#sec-6) / [§10.1](compose-file.md#sec-10-1).
 
 ---
 
@@ -397,7 +397,7 @@ Command-level rules for `depends_on` ordering:
 | `NO_COLOR` | every command | Same as passing [`--no-color`](#global-options); either one disables color. |
 | `COMPOSE_FILE` | compose commands | Compose file(s) to load when no `-f` is given — see [File discovery](#compose-file-and-project-options). |
 | `COMPOSE_PATH_SEPARATOR` | compose commands | Separator used to split `COMPOSE_FILE` into multiple paths. Defaults to `;` on Windows. |
-| `COMPOSE_PROFILES` | compose commands | Comma-separated profiles to activate, unioned with `--profile` — see [compose-file.md#profiles](compose-file.md#profiles). |
+| `COMPOSE_PROFILES` | compose commands | Comma-separated profiles to activate, unioned with `--profile` — see [compose-file.md §4.10.5](compose-file.md#sec-4-10-5). |
 | `WSLCCD_PATH` | `daemon start`, `daemon install` (fallback) | Explicit path to `wslccd(.exe)`, checked before "next to `wslcc.exe`" and the development sibling-artifacts fallback. |
 | `WSLCC_DEBUG` | compose commands | Set to `1` to print full exception detail on an RPC failure instead of a friendly summary. |
 

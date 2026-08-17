@@ -56,9 +56,7 @@ public sealed class DaemonInstallCommand : AsyncCommand<DaemonInstallCommand.Set
             AnsiConsole.MarkupLine($"[red]Failed to register autostart[/] (exit code {addResult.ExitCode}).");
             var detail = addResult.StandardError.Length > 0 ? addResult.StandardError : addResult.StandardOutput;
             if (detail.Length > 0)
-            {
-                AnsiConsole.MarkupLine(detail.Trim().EscapeMarkup());
-            }
+    AnsiConsole.MarkupLine(detail.Trim().EscapeMarkup());
 
             return 1;
         }
@@ -94,9 +92,7 @@ public sealed class DaemonInstallCommand : AsyncCommand<DaemonInstallCommand.Set
             CreateNoWindow = true,
         };
         foreach (var arg in executableArgs)
-        {
-            startInfo.ArgumentList.Add(arg);
-        }
+    startInfo.ArgumentList.Add(arg);
 
         try
         {
