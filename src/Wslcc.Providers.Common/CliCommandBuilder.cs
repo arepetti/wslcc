@@ -154,6 +154,9 @@ public static class CliCommandBuilder
         // Compose file — hostname: container UTS name (--hostname).
         AddOption(args, "--hostname", spec.Hostname);
 
+        if (spec.ReadOnly)
+            args.Add("--read-only");
+
         if (spec.Entrypoint.Count > 0)
         {
             args.Add("--entrypoint");

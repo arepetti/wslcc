@@ -95,4 +95,7 @@ public sealed class ServiceSpec
 
     /// <summary>Compose <c>hostname:</c> — the container's hostname (UTS name).</summary>
     public string? Hostname { get; set; }
+
+    /// <summary>Compose <c>read_only:</c> — mount the container root filesystem read-only.</summary>
+    public bool ReadOnly { get; set; }
 }

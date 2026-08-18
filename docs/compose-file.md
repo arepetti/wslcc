@@ -1241,6 +1241,8 @@ volumes:
 
 This turns "the attacker wrote a binary into the image" into an immediate failure, and it makes the container's writable surface explicit. Most images need a few writable paths anyway, so pair it with `tmpfs:` ([§4.7.3](#sec-4-7-3)) for scratch space and named volumes for anything that must persist.
 
+***WSLCC note:*** `read_only: true` is emitted as `--read-only`. Writable paths still need bind or named volumes — service `tmpfs:` is not applied yet.
+
 <a id="sec-4-11-6"></a>
 #### 4.11.6 `userns_mode`
 Controls user-namespace remapping for the container.

@@ -88,6 +88,9 @@ public sealed class ContainerRunSpec
     /// <summary>Passed as <c>--hostname</c> when set.</summary>
     public string? Hostname { get; set; }
 
+    /// <summary>When <c>true</c>, passed as <c>--read-only</c> so the container root filesystem is read-only.</summary>
+    public bool ReadOnly { get; set; }
+
     /// <summary>Restart policy passed as <c>--restart</c> when set (e.g. <c>always</c>, <c>unless-stopped</c>).</summary>
     public string? Restart { get; set; }
 

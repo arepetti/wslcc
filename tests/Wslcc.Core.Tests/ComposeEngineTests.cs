@@ -363,7 +363,7 @@ public sealed class ComposeEngineTests
     }
 
     [Fact]
-    public async Task Up_applies_container_name_user_workdir_hostname_labels_entrypoint_and_env_file()
+    public async Task Up_applies_container_name_user_workdir_hostname_readonly_labels_entrypoint_and_env_file()
     {
         var dir = Path.Combine(Path.GetTempPath(), "wslcc-envfile-" + Guid.NewGuid().ToString("n"));
         Directory.CreateDirectory(dir);
@@ -383,6 +383,7 @@ public sealed class ComposeEngineTests
                 User = "1000:1000",
                 WorkingDir = "/app",
                 Hostname = "api-node-1",
+                ReadOnly = true,
                 Entrypoint = { "/bin/sh", "-c", "echo hi" },
                 EnvFile = { new EnvFileSpec { Path = "app.env" } },
             };
@@ -396,6 +397,7 @@ public sealed class ComposeEngineTests
             Assert.Equal("1000:1000", web.User);
             Assert.Equal("/app", web.WorkingDir);
             Assert.Equal("api-node-1", web.Hostname);
+            Assert.True(web.ReadOnly);
             Assert.Equal("platform", web.Labels["com.example.team"]);
             Assert.Equal("proj", web.Labels[WslccLabels.Project]);
             Assert.Equal("web", web.Labels[WslccLabels.Service]);

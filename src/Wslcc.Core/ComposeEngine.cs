@@ -1406,6 +1406,8 @@ public sealed class ComposeEngine : IComposeEngine
             User = service.User,
             WorkingDir = service.WorkingDir,
             Hostname = service.Hostname,
+            // Compose file — read_only: root filesystem --read-only.
+            ReadOnly = service.ReadOnly,
             Restart = service.Restart,
             HealthCheck = BuildContainerHealthCheck(service.HealthCheck),
             Detach = true,

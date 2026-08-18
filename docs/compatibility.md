@@ -121,7 +121,7 @@ Every service attribute, alphabetically. “Format” links to the syntax and ne
 | `profiles` | 🧩 Client-only | List form only — a scalar is read as “no profiles”. Filtering happens before the daemon. | [4.10.5](compose-file.md#sec-4-10-5) | 0.1 |
 | `provider` | ❌ Not read | External provider plugins are not supported. | [4.16.4](compose-file.md#sec-4-16-4) | |
 | `pull_policy` | ❌ Not read | Pulling is driven by `compose pull` / `up --pull` instead. | [4.2.3](compose-file.md#sec-4-2-3) | |
-| `read_only` | ❌ Not read | **Root filesystem stays writable.** | [4.11.5](compose-file.md#sec-4-11-5) | |
+| `read_only` | ✅ Applied | Passed as `--read-only` when true. | [4.11.5](compose-file.md#sec-4-11-5) | 0.1 |
 | `restart` | ⚠️ Partial | Passed through as `--restart`. Accepted by the `docker` provider; the preview `wslc` provider may reject the flag ([providers.md](providers.md)). | [4.9.1](compose-file.md#sec-4-9-1) | 0.1 |
 | `runtime` | ❌ Not read | Alternative OCI runtimes not selected. | [4.14.5](compose-file.md#sec-4-14-5) | |
 | `scale` | ❌ Not read | One container per service; no replicas. | [4.16.3](compose-file.md#sec-4-16-3) | |
@@ -229,9 +229,9 @@ These are the ones that bite when you reuse an existing file: WSLCC may accept t
 
 ### Not read at all (silently dropped)
 
-Every key marked ❌ in the [service key matrix](#service-keys) above. In practice the ones that hurt are `configs`, `secrets`, `deploy`, `privileged`, `cap_add`, `cap_drop`, `read_only`, `security_opt`, `devices`, `tmpfs`, `ulimits`, `extra_hosts`, `dns`, `domainname`, `shm_size`, `pids_limit`, `mem_limit`, `cpus`, `init`, `stdin_open`, `tty`, `network_mode`, `pid`, `ipc`, `uts`, `stop_grace_period`, `stop_signal`, `expose`, `volumes_from`, `links`, `logging`, and `scale` / `deploy.replicas`.
+Every key marked ❌ in the [service key matrix](#service-keys) above. In practice the ones that hurt are `configs`, `secrets`, `deploy`, `privileged`, `cap_add`, `cap_drop`, `security_opt`, `devices`, `tmpfs`, `ulimits`, `extra_hosts`, `dns`, `domainname`, `shm_size`, `pids_limit`, `mem_limit`, `cpus`, `init`, `stdin_open`, `tty`, `network_mode`, `pid`, `ipc`, `uts`, `stop_grace_period`, `stop_signal`, `expose`, `volumes_from`, `links`, `logging`, and `scale` / `deploy.replicas`.
 
-**Security note:** `user:` is applied. The hardening keys are not — `read_only:`, `privileged:`, `cap_drop:`, `security_opt:`, `userns_mode:` all have **no effect**. Do not assume YAML you trusted under Compose still enforces those constraints under WSLCC.
+**Security note:** `user:` and `read_only:` are applied. Other hardening keys are not — `privileged:`, `cap_drop:`, `security_opt:`, `userns_mode:` all have **no effect**. Do not assume YAML you trusted under Compose still enforces those unread constraints under WSLCC.
 
 **Resource note:** none of the CPU, memory, PID, or IO limits are enforced. A container that Compose would have capped at 512 MB can consume everything the host has.
 
@@ -277,7 +277,7 @@ Merge rules as implemented: [compose-file.md §2.2](compose-file.md#sec-2-2). Tr
    wslcc compose config
    wslcc compose config --hash "*"
    ```
-4. Search your compose files for: long-form `ports`/`volumes`, `configs`/`secrets`/`deploy`, `privileged` / `cap_*` / `read_only` / `security_opt`, resource limits (`mem_limit`, `cpus`, `ulimits`), and bare `environment` keys you expect from your shell (those inherit from `wslccd`, not your client shell).
+4. Search your compose files for: long-form `ports`/`volumes`, `configs`/`secrets`/`deploy`, `privileged` / `cap_*` / `security_opt`, resource limits (`mem_limit`, `cpus`, `ulimits`), and bare `environment` keys you expect from your shell (those inherit from `wslccd`, not your client shell).
 5. Cross-check each hit against the [service key matrix](#service-keys): the long-form entries will fail loudly, everything else will fail silently.
 6. Pass `-f` for overrides explicitly; use `--project-directory` if you invoke from another cwd (also affects `env_file:` / bind / build path resolution).
 7. Bring the stack up under WSLCC (`up -d`), verify with `wslcc compose ps` — not `docker compose ps`.

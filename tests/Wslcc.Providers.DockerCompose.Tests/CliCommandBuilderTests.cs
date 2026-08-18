@@ -48,7 +48,7 @@ public sealed class CliCommandBuilderTests
     }
 
     [Fact]
-    public void BuildRunArguments_includes_user_workdir_hostname_entrypoint_env_file_and_labels()
+    public void BuildRunArguments_includes_user_workdir_hostname_readonly_entrypoint_env_file_and_labels()
     {
         var spec = new ContainerRunSpec
         {
@@ -57,6 +57,7 @@ public sealed class CliCommandBuilderTests
             User = "1000:1000",
             WorkingDir = "/app",
             Hostname = "api-node-1",
+            ReadOnly = true,
         };
         spec.Labels["com.example.team"] = "platform";
         spec.Labels["wslcc.project"] = "proj";
@@ -77,9 +78,18 @@ public sealed class CliCommandBuilderTests
         Assert.Contains("-u 1000:1000", args);
         Assert.Contains("-w /app", args);
         Assert.Contains("--hostname api-node-1", args);
+        Assert.Contains("--read-only", args);
         Assert.Contains("--entrypoint /bin/sh", args);
         Assert.EndsWith("busybox -c \"echo hi\" extra", args);
         Assert.True(args.IndexOf("--env-file", StringComparison.Ordinal) < args.IndexOf("-e NODE_ENV", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void BuildRunArguments_omits_readonly_when_false()
+    {
+        var spec = new ContainerRunSpec { Image = "busybox", ReadOnly = false };
+        var args = CliCommandBuilder.BuildRunArguments(spec);
+        Assert.DoesNotContain("--read-only", args);
     }
 
     [Fact]
