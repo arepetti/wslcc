@@ -92,4 +92,7 @@ public sealed class ServiceSpec
 
     /// <summary>Compose <c>user:</c> — the user (and optionally group) the container process runs as.</summary>
     public string? User { get; set; }
+
+    /// <summary>Compose <c>hostname:</c> — the container's hostname (UTS name).</summary>
+    public string? Hostname { get; set; }
 }

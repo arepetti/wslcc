@@ -85,6 +85,9 @@ public sealed class ContainerRunSpec
     /// <summary>Passed as <c>-w</c>/<c>--workdir</c> when set.</summary>
     public string? WorkingDir { get; set; }
 
+    /// <summary>Passed as <c>--hostname</c> when set.</summary>
+    public string? Hostname { get; set; }
+
     /// <summary>Restart policy passed as <c>--restart</c> when set (e.g. <c>always</c>, <c>unless-stopped</c>).</summary>
     public string? Restart { get; set; }
 

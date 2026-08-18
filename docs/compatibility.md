@@ -91,7 +91,7 @@ Every service attribute, alphabetically. “Format” links to the syntax and ne
 | `gpus` | ❌ Not read | No GPU devices requested. | [4.12.20](compose-file.md#sec-4-12-20) | |
 | `group_add` | ❌ Not read | Supplementary groups not added. | [4.11.8](compose-file.md#sec-4-11-8) | |
 | `healthcheck` | ✅ Applied | `test`, `interval`, `timeout`, `retries`, `start_period`, `disable`. `start_interval` is not read; `test` is flattened to a shell command. | [4.8.2](compose-file.md#sec-4-8-2) | 0.1 |
-| `hostname` | ❌ Not read | Container hostname not set. | [4.3.5](compose-file.md#sec-4-3-5) | |
+| `hostname` | ✅ Applied | Passed as `--hostname`. | [4.3.5](compose-file.md#sec-4-3-5) | 0.1 |
 | `image` | ✅ Applied | Optional when `build:` is present. | [4.2.1](compose-file.md#sec-4-2-1) | 0.1 |
 | `init` | ❌ Not read | No init shim; PID 1 stays your process. | [4.3.11](compose-file.md#sec-4-3-11) | |
 | `ipc` | ❌ Not read | IPC namespace mode not applied. | [4.14.1](compose-file.md#sec-4-14-1) | |
@@ -229,7 +229,7 @@ These are the ones that bite when you reuse an existing file: WSLCC may accept t
 
 ### Not read at all (silently dropped)
 
-Every key marked ❌ in the [service key matrix](#service-keys) above. In practice the ones that hurt are `configs`, `secrets`, `deploy`, `privileged`, `cap_add`, `cap_drop`, `read_only`, `security_opt`, `devices`, `tmpfs`, `ulimits`, `extra_hosts`, `dns`, `hostname`, `domainname`, `shm_size`, `pids_limit`, `mem_limit`, `cpus`, `init`, `stdin_open`, `tty`, `network_mode`, `pid`, `ipc`, `uts`, `stop_grace_period`, `stop_signal`, `expose`, `volumes_from`, `links`, `logging`, and `scale` / `deploy.replicas`.
+Every key marked ❌ in the [service key matrix](#service-keys) above. In practice the ones that hurt are `configs`, `secrets`, `deploy`, `privileged`, `cap_add`, `cap_drop`, `read_only`, `security_opt`, `devices`, `tmpfs`, `ulimits`, `extra_hosts`, `dns`, `domainname`, `shm_size`, `pids_limit`, `mem_limit`, `cpus`, `init`, `stdin_open`, `tty`, `network_mode`, `pid`, `ipc`, `uts`, `stop_grace_period`, `stop_signal`, `expose`, `volumes_from`, `links`, `logging`, and `scale` / `deploy.replicas`.
 
 **Security note:** `user:` is applied. The hardening keys are not — `read_only:`, `privileged:`, `cap_drop:`, `security_opt:`, `userns_mode:` all have **no effect**. Do not assume YAML you trusted under Compose still enforces those constraints under WSLCC.
 

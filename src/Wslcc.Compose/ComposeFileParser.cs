@@ -99,6 +99,7 @@ public sealed class ComposeFileParser
         service.Restart = GetString(map, "restart");
         service.WorkingDir = GetString(map, "working_dir");
         service.User = GetString(map, "user");
+        service.Hostname = GetString(map, "hostname");
 
         service.Build = ParseBuild(GetValue(map, "build"));
         service.Command = ToShellOrExecList(GetValue(map, "command"), "command", name);

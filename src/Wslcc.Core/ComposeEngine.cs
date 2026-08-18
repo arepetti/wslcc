@@ -1402,8 +1402,10 @@ public sealed class ComposeEngine : IComposeEngine
         {
             Image = image,
             Name = ResolveContainerName(projectName, service),
+            // Compose file — user / working_dir / hostname: process identity options.
             User = service.User,
             WorkingDir = service.WorkingDir,
+            Hostname = service.Hostname,
             Restart = service.Restart,
             HealthCheck = BuildContainerHealthCheck(service.HealthCheck),
             Detach = true,

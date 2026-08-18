@@ -151,6 +151,8 @@ public static class CliCommandBuilder
     {
         AddOption(args, "-u", spec.User);
         AddOption(args, "-w", spec.WorkingDir);
+        // Compose file — hostname: container UTS name (--hostname).
+        AddOption(args, "--hostname", spec.Hostname);
 
         if (spec.Entrypoint.Count > 0)
         {

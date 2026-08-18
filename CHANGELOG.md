@@ -31,5 +31,5 @@ No version has been tagged or published yet; everything below is under developme
 - `compose pull` skips build-only services (no `image:`) instead of reporting them as failed.
 - Long-form `ports:` / `volumes:` map entries are rejected with a clear error instead of being coerced into a garbage runtime argument.
 - String `command:` / `entrypoint:` use Compose shell form (`/bin/sh -c "…"`) instead of a single argv token.
-- Service `user:`, `working_dir:`, `labels:`, `entrypoint:`, `env_file:`, and `container_name:` are applied at runtime (no longer silent no-ops).
+- Service `user:`, `working_dir:`, `labels:`, `entrypoint:`, `env_file:`, `container_name:`, and `hostname:` are applied at runtime (no longer silent no-ops).
 

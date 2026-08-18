@@ -210,7 +210,7 @@ public sealed class ComposeFileParserTests
     }
 
     [Fact]
-    public void Parses_user_workdir_labels_container_name()
+    public void Parses_user_workdir_hostname_labels_container_name()
     {
         const string yaml = """
             services:
@@ -219,6 +219,7 @@ public sealed class ComposeFileParserTests
                 container_name: my-web
                 user: "1000:1000"
                 working_dir: /app
+                hostname: api-node-1
                 labels:
                   com.example.team: platform
             """;
@@ -229,6 +230,7 @@ public sealed class ComposeFileParserTests
         Assert.Equal("my-web", web.ContainerName);
         Assert.Equal("1000:1000", web.User);
         Assert.Equal("/app", web.WorkingDir);
+        Assert.Equal("api-node-1", web.Hostname);
         Assert.Equal("platform", web.Labels["com.example.team"]);
     }
 

@@ -525,6 +525,8 @@ hostname: api-node-1
 
 This is distinct from network discovery: other services still reach this one by its service name and network aliases ([§4.6.1](#sec-4-6-1)), not by this hostname. Set it when software inside the container derives identity from the hostname, such as clustered databases or license checks.
 
+***WSLCC note:*** the value is passed through as `--hostname` on container create.
+
 <a id="sec-4-3-6"></a>
 #### 4.3.6 `domainname`
 Sets the NIS/DNS domain part of the container's fully qualified name, complementing `hostname:`.
