@@ -946,7 +946,7 @@ public sealed class ComposeEngineTests
             Name = "web",
             Image = "nginx",
             Networks = { "shared" },
-            Volumes = { "ext:/data" },
+            Volumes = { ServiceMount.FromShortSyntax("ext:/data") },
         };
         file.Networks["shared"] = new NetworkSpec { Name = "shared", External = true };
         file.Volumes["ext"] = new VolumeSpec { Name = "ext", External = true };
@@ -957,7 +957,7 @@ public sealed class ComposeEngineTests
         Assert.Empty(provider.EnsuredVolumes);  // external volume is not created
         var spec = Assert.Single(provider.RunSpecs);
         Assert.Equal("shared", spec.Network);            // external network attached by its bare name
-        Assert.Contains("ext:/data", spec.Volumes);      // external volume referenced by its bare name
+        Assert.Contains(spec.Volumes, m => m.Source == "ext" && m.Target == "/data");
     }
 
     [Fact]
@@ -971,17 +971,63 @@ public sealed class ComposeEngineTests
         {
             Name = "web",
             Image = "nginx",
-            Volumes = { "data:/var/lib", "./conf:/etc/app:ro", "/var/log/host:/logs", "/scratch" },
+            Volumes =
+            {
+                ServiceMount.FromShortSyntax("data:/var/lib"),
+                ServiceMount.FromShortSyntax("./conf:/etc/app:ro"),
+                ServiceMount.FromShortSyntax("/var/log/host:/logs"),
+                ServiceMount.FromShortSyntax("/scratch"),
+            },
         };
         file.Volumes["data"] = new VolumeSpec { Name = "data" };
 
         await engine.UpAsync("proj", file, providerName: null, pull: false, buildPolicy: BuildPolicy.Auto, baseDirectory: baseDir);
 
         var spec = Assert.Single(provider.RunSpecs);
-        Assert.Contains("proj_data:/var/lib", spec.Volumes);                             // named -> project-prefixed
-        Assert.Contains($"{Path.GetFullPath(Path.Combine(baseDir, "conf"))}:/etc/app:ro", spec.Volumes); // relative bind resolved
-        Assert.Contains("/var/log/host:/logs", spec.Volumes);                            // absolute bind unchanged
-        Assert.Contains("/scratch", spec.Volumes);                                       // anonymous unchanged
+        Assert.Contains(spec.Volumes, m => m.Source == "proj_data" && m.Target == "/var/lib");
+        Assert.Contains(spec.Volumes, m =>
+            m.Source == Path.GetFullPath(Path.Combine(baseDir, "conf"))
+            && m.Target == "/etc/app"
+            && m.ReadOnly);
+        Assert.Contains(spec.Volumes, m => m.Source == "/var/log/host" && m.Target == "/logs");
+        Assert.Contains(spec.Volumes, m => m.Source is null && m.Target == "/scratch");
+    }
+
+    [Fact]
+    public async Task Up_resolves_tmpfs_and_long_form_bind()
+    {
+        var provider = new FakeProvider("docker", true);
+        var engine = new ComposeEngine(new[] { provider });
+        var baseDir = Path.GetTempPath();
+        var file = new ComposeFile();
+        file.Services["web"] = new ServiceSpec
+        {
+            Name = "web",
+            Image = "nginx",
+            ReadOnly = true,
+            Volumes =
+            {
+                new ServiceMount
+                {
+                    Type = MountType.Bind,
+                    Source = "./cfg",
+                    Target = "/etc/app",
+                    ReadOnly = true,
+                    BindPropagation = "rshared",
+                },
+                ServiceMount.FromTmpfsShortSyntax("/run:size=1m"),
+            },
+        };
+
+        await engine.UpAsync("proj", file, providerName: null, pull: false, buildPolicy: BuildPolicy.Auto, baseDirectory: baseDir);
+
+        var spec = Assert.Single(provider.RunSpecs);
+        Assert.True(spec.ReadOnly);
+        Assert.Contains(spec.Volumes, m =>
+            m.Type == MountType.Bind
+            && m.Source == Path.GetFullPath(Path.Combine(baseDir, "cfg"))
+            && m.BindPropagation == "rshared");
+        Assert.Contains(spec.Volumes, m => m.Type == MountType.Tmpfs && m.Target == "/run" && m.TmpfsSize == "1m");
     }
 
     [Fact]

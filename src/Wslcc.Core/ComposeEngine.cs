@@ -263,7 +263,7 @@ public sealed class ComposeEngine : IComposeEngine
             spec.NetworkAlias = service.Name;
         }
 
-        // Compose file — volumes: short syntax only; sources resolve to project volumes or host paths.
+        // Compose file — volumes / tmpfs: resolve named volumes and bind sources; create_host_path mkdir.
         foreach (var mount in service.Volumes)
             spec.Volumes.Add(ResolveMount(run.File, run.ProjectName, run.BaseDirectory, mount));
 
@@ -972,58 +972,79 @@ public sealed class ComposeEngine : IComposeEngine
     }
 
     /// <summary>
-    /// Resolves a service volume in Compose short syntax (<c>[SOURCE:]TARGET[:MODE]</c>) into a
-    /// <c>docker run -v</c> value: named-volume sources are mapped to their project-prefixed name (unless
+    /// Resolves a service mount: named-volume sources are mapped to their project-prefixed name (unless
     /// external or undeclared), relative bind sources are resolved against the project directory, and
-    /// anonymous volumes (<c>TARGET</c> only) pass through unchanged.
+    /// anonymous volumes / tmpfs pass through with an unresolved source. When
+    /// <see cref="ServiceMount.BindCreateHostPath"/> is true, missing bind host directories are created.
     /// </summary>
-    private static string ResolveMount(ComposeFile file, string projectName, string? baseDirectory, string raw)
+    private static ServiceMount ResolveMount(
+        ComposeFile file,
+        string projectName,
+        string? baseDirectory,
+        ServiceMount mount)
     {
-        var (source, target, mode) = SplitMount(raw);
-        if (source is null || target is null)
-            return raw;
-
-        var resolvedSource = IsBindSource(source)
-            ? ResolveBindSource(source, baseDirectory)
-            : ResolveVolumeSource(file, projectName, source);
-
-        return string.IsNullOrEmpty(mode) ? $"{resolvedSource}:{target}" : $"{resolvedSource}:{target}:{mode}";
-    }
-
-    /// <summary>
-    /// Splits a mount string into source / target / mode. A single segment is an anonymous volume
-    /// (target only). A leading Windows drive letter (e.g. <c>C:\path</c>) is kept with its source rather
-    /// than treated as a separator.
-    /// </summary>
-    private static (string? Source, string? Target, string? Mode) SplitMount(string raw)
-    {
-        var value = raw.Trim();
-        if (value.Length == 0)
-            return (null, null, null);
-
-        var parts = value.Split(':');
-
-        // Re-join a Windows drive ("C" + "\path") that ':' split apart.
-        var startsWithDriveLetter = parts.Length >= 2 && parts[0].Length == 1 && char.IsLetter(parts[0][0]);
-        if (startsWithDriveLetter)
-            parts = new[] { parts[0] + ":" + parts[1] }.Concat(parts.Skip(2)).ToArray();
-
-        return parts.Length switch
+        if (mount.Type is MountType.Tmpfs)
         {
-            1 => (null, parts[0], null),
-            2 => (parts[0], parts[1], null),
-            3 => (parts[0], parts[1], parts[2]),
-            _ => (null, null, null), // malformed; caller passes the original through
-        };
+            return CloneMount(mount);
+        }
+
+        if (mount.Type is MountType.Bind)
+        {
+            var source = mount.Source ?? string.Empty;
+            var resolved = ResolveBindSource(source, baseDirectory);
+            if (mount.BindCreateHostPath == true)
+                EnsureBindHostPath(resolved);
+
+            var resolvedBind = CloneMount(mount);
+            resolvedBind.Source = resolved;
+            return resolvedBind;
+        }
+
+        // Volume: anonymous (no source) or named.
+        if (string.IsNullOrEmpty(mount.Source))
+            return CloneMount(mount);
+
+        var resolvedVolume = CloneMount(mount);
+        resolvedVolume.Source = ResolveVolumeSource(file, projectName, mount.Source);
+        return resolvedVolume;
     }
 
-    private static bool IsBindSource(string source)
-        => source.StartsWith('/')
-            || source.StartsWith('.')
-            || source.StartsWith('~')
-            || source.Contains('/')
-            || source.Contains('\\')
-            || (source.Length >= 2 && char.IsLetter(source[0]) && source[1] == ':');
+    private static ServiceMount CloneMount(ServiceMount mount)
+        => new()
+        {
+            Type = mount.Type,
+            Source = mount.Source,
+            Target = mount.Target,
+            ReadOnly = mount.ReadOnly,
+            VolumeNocopy = mount.VolumeNocopy,
+            VolumeSubpath = mount.VolumeSubpath,
+            BindPropagation = mount.BindPropagation,
+            BindCreateHostPath = mount.BindCreateHostPath,
+            BindSelinux = mount.BindSelinux,
+            BindRecursive = mount.BindRecursive,
+            TmpfsSize = mount.TmpfsSize,
+            TmpfsMode = mount.TmpfsMode,
+            TmpfsExtraOptions = mount.TmpfsExtraOptions,
+        };
+
+    private static void EnsureBindHostPath(string source)
+    {
+        if (string.IsNullOrWhiteSpace(source) || source.StartsWith('~'))
+            return;
+
+        try
+        {
+            if (!Directory.Exists(source) && !File.Exists(source))
+                Directory.CreateDirectory(source);
+        }
+        catch (IOException)
+        {
+            // Runtime will surface the failure if the path remains unusable.
+        }
+        catch (UnauthorizedAccessException)
+        {
+        }
+    }
 
     private static string ResolveBindSource(string source, string? baseDirectory)
     {

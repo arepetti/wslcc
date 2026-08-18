@@ -133,14 +133,14 @@ Every service attribute, alphabetically. “Format” links to the syntax and ne
 | `stop_signal` | ❌ Not read | Always the runtime default (`SIGTERM`). | [4.9.3](compose-file.md#sec-4-9-3) | |
 | `storage_opt` | ❌ Not read | Storage driver options not passed. | [4.17.1](compose-file.md#sec-4-17-1) | |
 | `sysctls` | ❌ Not read | Kernel parameters not set (they do merge across files, then get dropped). | [4.17.2](compose-file.md#sec-4-17-2) | |
-| `tmpfs` | ❌ Not read | No tmpfs mounts created. | [4.7.3](compose-file.md#sec-4-7-3) | |
+| `tmpfs` | ✅ Applied | Emitted as `--tmpfs` (path or `path:opts`). | [4.7.3](compose-file.md#sec-4-7-3) | 0.1 |
 | `tty` | ❌ Not read | No `-t`. | [4.3.9](compose-file.md#sec-4-3-9) | |
 | `ulimits` | ❌ Not read | Daemon defaults apply; `nofile` is not raised. | [4.12.22](compose-file.md#sec-4-12-22) | |
 | `use_api_socket` | ❌ Not read | The engine API socket is not mounted. | [4.17.3](compose-file.md#sec-4-17-3) | |
 | `user` | ✅ Applied | Passed as `-u`; accepts `uid`, `uid:gid`, or names. | [4.3.4](compose-file.md#sec-4-3-4) | 0.1 |
 | `userns_mode` | ❌ Not read | User namespace mode not applied. | [4.11.6](compose-file.md#sec-4-11-6) | |
 | `uts` | ❌ Not read | UTS namespace mode not applied. | [4.14.3](compose-file.md#sec-4-14-3) | |
-| `volumes` | ⚠️ Partial | Short syntax applied (named, bind, anonymous, `:ro`). Long map form is 🛑 **rejected** with an error. | [4.7.1](compose-file.md#sec-4-7-1) | 0.1 |
+| `volumes` | ⚠️ Partial | Short syntax and long-form `type: volume` / `bind` / `tmpfs` (including option blocks → `--mount` / `--tmpfs`). `type: npipe` / `cluster` / `image` are 🛑 **rejected**. | [4.7.1](compose-file.md#sec-4-7-1) | 0.1 |
 | `volumes_from` | ❌ Not read | Mounts are not inherited from other containers. | [4.7.2](compose-file.md#sec-4-7-2) | |
 | `working_dir` | ✅ Applied | Passed as `-w`. | [4.3.3](compose-file.md#sec-4-3-3) | 0.1 |
 
@@ -154,7 +154,7 @@ The ⚠️ rows are the ones that reward a closer look, because they accept your
 | --- | --- | --- |
 | `build` | `context`, `dockerfile`, `target`, `args`; string shorthand | `cache_from`/`cache_to`, `secrets`, `ssh`, `platforms`, `tags`, `labels`, `network`, `no_cache`, `pull`, `extra_hosts`, `ulimits`, `isolation`, `privileged`, `additional_contexts`, `dockerfile_inline`, `entitlements` |
 | `ports` | Short syntax, including host IP, ranges, `/udp` | Long map form → hard error (not silently dropped) |
-| `volumes` (service) | Short syntax: named, bind, anonymous, `:ro` / `:rw` | Long map form → hard error; `bind`/`volume`/`tmpfs` option blocks unreachable |
+| `volumes` (service) | Short syntax; long-form `volume` / `bind` / `tmpfs` (+ nested option blocks); service `tmpfs:` | `type: npipe` / `cluster` / `image` → hard error; `consistency` ignored |
 | `networks` (service) | Which networks the service joins | `aliases`, `ipv4_address`, `ipv6_address`, `link_local_ips`, `mac_address`, `priority`, `gw_priority`, `driver_opts`, `interface_name` |
 | `networks` (top level) | `driver`, `external` | `name`, `ipam` (subnets, gateways), `internal`, `attachable`, `labels`, `driver_opts`, `enable_ipv4`/`enable_ipv6` |
 | `volumes` (top level) | `driver`, `external` | `name`, `labels`, `driver_opts` |
@@ -223,13 +223,14 @@ These are the ones that bite when you reuse an existing file: WSLCC may accept t
 | `env_file` vs CLI `--env-file` / `.env` | Both feed container env / project env per Compose rules | Service `env_file:` → container `--env-file`. CLI `--env-file` / `.env` only affect *interpolation* |
 | `container_name` | Fixed name; blocks scale | Honored; duplicate names across services fail `up` |
 | `labels` (service) | Container labels (+ Compose's own) | Honored; WSLCC's `wslcc.*` labels win on key clash |
-| `ports` / `volumes` long map form | Supported | **Rejected** with an error (short syntax only) |
+| `ports` long map form | Supported | **Rejected** with an error (short syntax only) |
+| `volumes` long map form | Supported | `volume` / `bind` / `tmpfs` applied; `npipe` / `cluster` / `image` **rejected** |
 | `networks:` map values (`aliases`, `ipv4_address`, …) | Applied | Only membership (keys) applied; map values ignored |
 | Top-level `networks` / `volumes` | `driver`, `external`, `name`, IPAM, `driver_opts`, … | Only `driver` and `external` modeled; no resource `name:` override, no IPAM |
 
 ### Not read at all (silently dropped)
 
-Every key marked ❌ in the [service key matrix](#service-keys) above. In practice the ones that hurt are `configs`, `secrets`, `deploy`, `privileged`, `cap_add`, `cap_drop`, `security_opt`, `devices`, `tmpfs`, `ulimits`, `extra_hosts`, `dns`, `domainname`, `shm_size`, `pids_limit`, `mem_limit`, `cpus`, `init`, `stdin_open`, `tty`, `network_mode`, `pid`, `ipc`, `uts`, `stop_grace_period`, `stop_signal`, `expose`, `volumes_from`, `links`, `logging`, and `scale` / `deploy.replicas`.
+Every key marked ❌ in the [service key matrix](#service-keys) above. In practice the ones that hurt are `configs`, `secrets`, `deploy`, `privileged`, `cap_add`, `cap_drop`, `security_opt`, `devices`, `ulimits`, `extra_hosts`, `dns`, `domainname`, `shm_size`, `pids_limit`, `mem_limit`, `cpus`, `init`, `stdin_open`, `tty`, `network_mode`, `pid`, `ipc`, `uts`, `stop_grace_period`, `stop_signal`, `expose`, `volumes_from`, `links`, `logging`, and `scale` / `deploy.replicas`.
 
 **Security note:** `user:` and `read_only:` are applied. Other hardening keys are not — `privileged:`, `cap_drop:`, `security_opt:`, `userns_mode:` all have **no effect**. Do not assume YAML you trusted under Compose still enforces those unread constraints under WSLCC.
 
@@ -259,7 +260,7 @@ These matter if you rely on multi-file overrides or `extends` the way Compose do
 
 | Topic | Compose | WSLCC today |
 | --- | --- | --- |
-| Sequence merge for long-form ports/volumes | Unique-key merge by target | N/A (long form rejected); short-form lists append + exact-dedup |
+| Sequence merge for long-form ports/volumes | Unique-key merge by target | Ports long form rejected; volumes long form accepted for volume/bind/tmpfs (lists append); short-form lists append + exact-dedup |
 | `build: .` merged with `build: { dockerfile: … }` | Becomes `{ context: ., dockerfile: … }` | Override can **drop** the string-side context (map wins wholesale when types differ) |
 | Long-form `depends_on` field merge | Per-dependency fields merge | Overriding one field (e.g. `required`) can **replace** the whole dependency object and lose `condition` |
 | `extends` non-inheritable keys | e.g. `container_name` not inherited | Several keys may still merge from the base (stricter Compose non-inherit rules not fully matched) |
@@ -277,8 +278,8 @@ Merge rules as implemented: [compose-file.md §2.2](compose-file.md#sec-2-2). Tr
    wslcc compose config
    wslcc compose config --hash "*"
    ```
-4. Search your compose files for: long-form `ports`/`volumes`, `configs`/`secrets`/`deploy`, `privileged` / `cap_*` / `security_opt`, resource limits (`mem_limit`, `cpus`, `ulimits`), and bare `environment` keys you expect from your shell (those inherit from `wslccd`, not your client shell).
-5. Cross-check each hit against the [service key matrix](#service-keys): the long-form entries will fail loudly, everything else will fail silently.
+4. Search your compose files for: long-form `ports`, unsupported volume types (`npipe` / `cluster` / `image`), `configs`/`secrets`/`deploy`, `privileged` / `cap_*` / `security_opt`, resource limits (`mem_limit`, `cpus`, `ulimits`), and bare `environment` keys you expect from your shell (those inherit from `wslccd`, not your client shell).
+5. Cross-check each hit against the [service key matrix](#service-keys): long-form `ports` and unsupported volume types fail loudly; unread keys fail silently.
 6. Pass `-f` for overrides explicitly; use `--project-directory` if you invoke from another cwd (also affects `env_file:` / bind / build path resolution).
 7. Bring the stack up under WSLCC (`up -d`), verify with `wslcc compose ps` — not `docker compose ps`.
 8. Tear down with `wslcc compose down` (add `-v` only if you intend to delete named volumes).

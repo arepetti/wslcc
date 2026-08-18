@@ -273,21 +273,107 @@ public sealed class ComposeFileParserTests
     }
 
     [Fact]
-    public void Rejects_long_form_volumes()
+    public void Parses_short_and_long_form_volumes_and_tmpfs()
+    {
+        const string yaml = """
+            services:
+              web:
+                image: nginx
+                read_only: true
+                tmpfs:
+                  - /tmp
+                  - /run:size=64m,mode=0o1777
+                volumes:
+                  - data:/var/lib
+                  - type: bind
+                    source: ./config
+                    target: /etc/app
+                    read_only: true
+                  - type: tmpfs
+                    target: /cache
+                    tmpfs:
+                      size: 64mb
+                      mode: 0o1777
+                  - type: volume
+                    source: data
+                    target: /db
+                    volume:
+                      nocopy: true
+                      subpath: pgdata
+            volumes:
+              data:
+            """;
+
+        var file = _parser.Parse(yaml);
+        var mounts = file.Services["web"].Volumes;
+
+        Assert.Equal(6, mounts.Count);
+
+        Assert.Equal(MountType.Volume, mounts[0].Type);
+        Assert.Equal("data", mounts[0].Source);
+        Assert.Equal("/var/lib", mounts[0].Target);
+
+        Assert.Equal(MountType.Bind, mounts[1].Type);
+        Assert.Equal("./config", mounts[1].Source);
+        Assert.Equal("/etc/app", mounts[1].Target);
+        Assert.True(mounts[1].ReadOnly);
+
+        Assert.Equal(MountType.Tmpfs, mounts[2].Type);
+        Assert.Equal("/cache", mounts[2].Target);
+        Assert.Equal("64mb", mounts[2].TmpfsSize);
+        Assert.Equal("1777", mounts[2].TmpfsMode);
+
+        Assert.Equal(MountType.Volume, mounts[3].Type);
+        Assert.True(mounts[3].VolumeNocopy);
+        Assert.Equal("pgdata", mounts[3].VolumeSubpath);
+
+        Assert.Equal(MountType.Tmpfs, mounts[4].Type);
+        Assert.Equal("/tmp", mounts[4].Target);
+
+        Assert.Equal(MountType.Tmpfs, mounts[5].Type);
+        Assert.Equal("/run", mounts[5].Target);
+        Assert.Equal("64m", mounts[5].TmpfsSize);
+        Assert.Equal("1777", mounts[5].TmpfsMode);
+    }
+
+    [Theory]
+    [InlineData("npipe")]
+    [InlineData("cluster")]
+    [InlineData("image")]
+    public void Rejects_unsupported_volume_types(string type)
+    {
+        var yaml = $"""
+            services:
+              web:
+                image: nginx
+                volumes:
+                  - type: {type}
+                    source: unused
+                    target: /unused
+            """;
+
+        var ex = Assert.Throws<ComposeLoadException>(() => _parser.Parse(yaml));
+
+        Assert.Contains("web", ex.Message);
+        Assert.Contains(type, ex.Message);
+        Assert.Contains("not supported", ex.Message);
+        Assert.Contains("volume, bind, tmpfs", ex.Message);
+    }
+
+    [Fact]
+    public void Rejects_missing_volume_type()
     {
         const string yaml = """
             services:
               web:
                 image: nginx
                 volumes:
-                  - type: bind
-                    source: ./data
+                  - source: ./data
                     target: /data
             """;
 
         var ex = Assert.Throws<ComposeLoadException>(() => _parser.Parse(yaml));
 
-        Assert.Contains("volumes", ex.Message);
-        Assert.Contains("long map form", ex.Message);
+        Assert.Contains("volume type is required", ex.Message);
     }
 }

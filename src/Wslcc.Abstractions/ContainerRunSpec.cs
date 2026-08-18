@@ -1,3 +1,5 @@
+using Wslcc.Abstractions.Compose;
+
 namespace Wslcc.Abstractions;
 
 /// <summary>
@@ -23,7 +25,13 @@ namespace Wslcc.Abstractions;
 /// spec.Labels[WslccLabels.Service] = "web";
 /// spec.Environment["NGINX_PORT"] = "80";
 /// spec.Ports.Add("8080:80");
-/// spec.Volumes.Add("myproject_data:/usr/share/nginx/html:ro");
+/// spec.Volumes.Add(new ServiceMount
+/// {
+///     Type = MountType.Volume,
+///     Source = "myproject_data",
+///     Target = "/usr/share/nginx/html",
+///     ReadOnly = true,
+/// });
 ///
 /// var containerId = await provider.RunContainerAsync(spec, cancellationToken);
 /// </code>
@@ -58,11 +66,10 @@ public sealed class ContainerRunSpec
     public IList<string> Ports { get; } = new List<string>();
 
     /// <summary>
-    /// Resolved volume mounts in <c>docker run -v</c> form (e.g. "myproject_data:/var/lib",
-    /// "/host/path:/app:ro", or an anonymous "/data"). Named volumes are already project-prefixed and
-    /// relative bind sources already resolved by the engine.
+    /// Resolved mounts (named volumes project-prefixed, bind sources absolute). The CLI builder emits
+    /// <c>-v</c>, <c>--mount</c>, or <c>--tmpfs</c> depending on <see cref="ServiceMount.Type"/> and options.
     /// </summary>
-    public IList<string> Volumes { get; } = new List<string>();
+    public IList<ServiceMount> Volumes { get; } = new List<ServiceMount>();
 
     /// <summary>Network the container is attached to at creation time. Additional networks are connected afterward.</summary>
     public string? Network { get; set; }

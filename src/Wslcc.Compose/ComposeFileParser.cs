@@ -51,7 +51,7 @@ public sealed class ComposeFileParser
     /// <exception cref="ArgumentNullException"><paramref name="yaml"/> is <c>null</c>.</exception>
     /// <exception cref="ComposeLoadException">
     /// The document is invalid YAML, or a service uses a form the parser rejects (e.g. the long map
-    /// form of <c>ports</c>/<c>volumes</c>, or a malformed <c>env_file</c> entry).
+    /// form of <c>ports</c>, an unsupported volume <c>type</c>, or a malformed <c>env_file</c> entry).
     /// </exception>
     public ComposeFile Parse(string yaml, string? source = null)
     {
@@ -108,7 +108,8 @@ public sealed class ComposeFileParser
         service.Environment = ToKeyValues(GetValue(map, "environment"));
         service.EnvFile = ParseEnvFiles(GetValue(map, "env_file"), name);
         service.Ports = ToShortSyntaxList(GetValue(map, "ports"), "ports", name);
-        service.Volumes = ToShortSyntaxList(GetValue(map, "volumes"), "volumes", name);
+        service.Volumes = ParseServiceVolumes(GetValue(map, "volumes"), name);
+        AppendServiceTmpfs(service.Volumes, GetValue(map, "tmpfs"), name);
         service.DependsOn = ParseDependsOn(GetValue(map, "depends_on"));
         service.HealthCheck = ParseHealthCheck(GetValue(map, "healthcheck"));
         service.Networks = ToKeyList(GetValue(map, "networks"));
@@ -214,12 +215,11 @@ public sealed class ComposeFileParser
         };
     }
 
-    // Compose file — ports / volumes: the long map form is rejected; short syntax only.
+    // Compose file — ports: the long map form is rejected; short syntax only.
 
     /// <summary>
-    /// Reads a short-syntax string list (<c>ports</c>/<c>volumes</c>). A long-form map entry (or a
-    /// bare map in place of a list) is rejected rather than coerced to a useless
-    /// <see cref="object.ToString"/> value.
+    /// Reads a short-syntax string list (<c>ports</c>). A long-form map entry (or a bare map in place
+    /// of a list) is rejected rather than coerced to a useless <see cref="object.ToString"/> value.
     /// </summary>
     private static IList<string> ToShortSyntaxList(object? value, string attribute, string serviceName)
     {
@@ -238,13 +238,165 @@ public sealed class ComposeFileParser
         return result;
     }
 
-    /// <summary>Throws when a <c>ports</c>/<c>volumes</c> value (or entry) uses the unsupported long map form.</summary>
+    /// <summary>Throws when a <c>ports</c> value (or entry) uses the unsupported long map form.</summary>
     private static void RejectLongForm(object? value, string attribute, string serviceName)
     {
         if (AsMap(value) is not null)
         {
             throw new ComposeLoadException(
-                $"service '{serviceName}': '{attribute}' long map form is not supported; use short syntax (e.g. \"8080:80\" or \"./src:/app\").");
+                $"service '{serviceName}': '{attribute}' long map form is not supported; use short syntax (e.g. \"8080:80\").");
+        }
+    }
+
+    // Compose file — volumes: short strings or long maps with type volume|bind|tmpfs.
+    // Compose file — tmpfs: string or list of path / path:opts (appended as MountType.Tmpfs).
+
+    /// <summary>
+    /// Reads service <c>volumes:</c> as short-syntax strings and/or long-form maps.
+    /// Supported long-form types are <c>volume</c>, <c>bind</c>, and <c>tmpfs</c>; anything else fails loudly.
+    /// </summary>
+    private static IList<ServiceMount> ParseServiceVolumes(object? value, string serviceName)
+    {
+        if (value is null)
+            return new List<ServiceMount>();
+
+        if (AsMap(value) is not null)
+        {
+            throw new ComposeLoadException(
+                $"service '{serviceName}': 'volumes' must be a list (got a map).");
+        }
+
+        var result = new List<ServiceMount>();
+        foreach (var item in AsList(value))
+        {
+            if (item is null)
+                continue;
+
+            if (AsMap(item) is { } map)
+            {
+                result.Add(ParseLongFormVolume(map, serviceName));
+                continue;
+            }
+
+            var raw = Convert.ToString(item) ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(raw))
+                continue;
+
+            result.Add(ServiceMount.FromShortSyntax(raw));
+        }
+
+        return result;
+    }
+
+    /// <summary>Reads one long-form <c>volumes:</c> map entry.</summary>
+    private static ServiceMount ParseLongFormVolume(IDictionary<string, object?> map, string serviceName)
+    {
+        var typeRaw = GetString(map, "type");
+        if (string.IsNullOrWhiteSpace(typeRaw))
+        {
+            throw new ComposeLoadException(
+                $"service '{serviceName}': volume type is required (supported: volume, bind, tmpfs).");
+        }
+
+        var type = typeRaw.Trim();
+        if (!string.Equals(type, "volume", StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(type, "bind", StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(type, "tmpfs", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new ComposeLoadException(
+                $"service '{serviceName}': volume type '{type}' is not supported (supported: volume, bind, tmpfs).");
+        }
+
+        var target = GetString(map, "target") ?? GetString(map, "destination");
+        if (string.IsNullOrWhiteSpace(target))
+        {
+            throw new ComposeLoadException(
+                $"service '{serviceName}': volume entry with type '{type}' requires 'target'.");
+        }
+
+        // Compose file — volumes consistency: accepted and ignored on Linux.
+        _ = GetString(map, "consistency");
+
+        var readOnly = GetBool(map, "read_only");
+        var source = GetString(map, "source");
+
+        if (string.Equals(type, "tmpfs", StringComparison.OrdinalIgnoreCase))
+        {
+            var tmpfsOpts = AsMap(GetValue(map, "tmpfs"));
+            return new ServiceMount
+            {
+                Type = MountType.Tmpfs,
+                Target = target,
+                ReadOnly = readOnly,
+                TmpfsSize = tmpfsOpts is null ? null : GetString(tmpfsOpts, "size"),
+                TmpfsMode = ServiceMount.NormalizeTmpfsMode(
+                    tmpfsOpts is null ? null : GetString(tmpfsOpts, "mode")),
+            };
+        }
+
+        if (string.Equals(type, "bind", StringComparison.OrdinalIgnoreCase))
+        {
+            if (string.IsNullOrWhiteSpace(source))
+            {
+                throw new ComposeLoadException(
+                    $"service '{serviceName}': volume type 'bind' requires 'source'.");
+            }
+
+            var bindOpts = AsMap(GetValue(map, "bind"));
+            return new ServiceMount
+            {
+                Type = MountType.Bind,
+                Source = source,
+                Target = target,
+                ReadOnly = readOnly,
+                BindPropagation = bindOpts is null ? null : GetString(bindOpts, "propagation"),
+                BindCreateHostPath = bindOpts is null ? null : GetOptionalBool(bindOpts, "create_host_path"),
+                BindSelinux = bindOpts is null ? null : GetString(bindOpts, "selinux"),
+                BindRecursive = bindOpts is null ? null : GetString(bindOpts, "recursive"),
+            };
+        }
+
+        // type: volume
+        var volumeOpts = AsMap(GetValue(map, "volume"));
+        return new ServiceMount
+        {
+            Type = MountType.Volume,
+            Source = source,
+            Target = target,
+            ReadOnly = readOnly,
+            VolumeNocopy = volumeOpts is null ? null : GetOptionalBool(volumeOpts, "nocopy"),
+            VolumeSubpath = volumeOpts is null ? null : GetString(volumeOpts, "subpath"),
+        };
+    }
+
+    /// <summary>Appends service-level <c>tmpfs:</c> entries (string or list of strings) to <paramref name="mounts"/>.</summary>
+    private static void AppendServiceTmpfs(IList<ServiceMount> mounts, object? value, string serviceName)
+    {
+        if (value is null)
+            return;
+
+        if (AsMap(value) is not null)
+        {
+            throw new ComposeLoadException(
+                $"service '{serviceName}': 'tmpfs' must be a string or a list of strings.");
+        }
+
+        foreach (var item in AsList(value))
+        {
+            if (item is null)
+                continue;
+
+            if (AsMap(item) is not null)
+            {
+                throw new ComposeLoadException(
+                    $"service '{serviceName}': 'tmpfs' entries must be strings (use volumes long form for tmpfs options maps).");
+            }
+
+            var raw = Convert.ToString(item) ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(raw))
+                continue;
+
+            mounts.Add(ServiceMount.FromTmpfsShortSyntax(raw));
         }
     }
 
@@ -413,6 +565,15 @@ public sealed class ComposeFileParser
 
     private static bool GetBool(IDictionary<string, object?> map, string key, bool defaultValue = false)
         => GetValue(map, key) is { } value && bool.TryParse(Convert.ToString(value), out var b) ? b : defaultValue;
+
+    /// <summary>Reads a bool when the key is present; otherwise <c>null</c>.</summary>
+    private static bool? GetOptionalBool(IDictionary<string, object?> map, string key)
+    {
+        if (GetValue(map, key) is not { } value)
+            return null;
+
+        return bool.TryParse(Convert.ToString(value), out var b) ? b : null;
+    }
 
     private static int? GetInt(IDictionary<string, object?> map, string key)
         => GetValue(map, key) is { } value

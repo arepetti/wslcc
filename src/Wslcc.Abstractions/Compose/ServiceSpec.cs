@@ -67,10 +67,11 @@ public sealed class ServiceSpec
     public IList<string> Ports { get; set; } = new List<string>();
 
     /// <summary>
-    /// Compose <c>volumes:</c> in short syntax (e.g. <c>"data:/var/lib"</c>, <c>"./src:/app:ro"</c>),
-    /// unresolved: named volumes are not yet project-prefixed and relative bind sources not yet rooted.
+    /// Compose <c>volumes:</c> (short or long form) and service <c>tmpfs:</c>, as structured mounts.
+    /// Sources are unresolved: named volumes are not yet project-prefixed and relative bind sources
+    /// not yet rooted.
     /// </summary>
-    public IList<string> Volumes { get; set; } = new List<string>();
+    public IList<ServiceMount> Volumes { get; set; } = new List<ServiceMount>();
 
     /// <summary>Compose <c>depends_on:</c>, normalized from both the list and map forms.</summary>
     public IList<ServiceDependency> DependsOn { get; set; } = new List<ServiceDependency>();

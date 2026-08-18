@@ -1,4 +1,5 @@
 using Wslcc.Abstractions;
+using Wslcc.Abstractions.Compose;
 using Wslcc.Providers.Common;
 
 namespace Wslcc.Providers.DockerCompose.Tests;
@@ -142,8 +143,8 @@ public sealed class CliCommandBuilderTests
     public void BuildRunArguments_includes_network_alias_and_volumes()
     {
         var spec = new ContainerRunSpec { Image = "nginx", Name = "proj-web", Network = "proj_default", NetworkAlias = "web" };
-        spec.Volumes.Add("proj_data:/var/lib");
-        spec.Volumes.Add("/host:/app:ro");
+        spec.Volumes.Add(ServiceMount.FromShortSyntax("proj_data:/var/lib"));
+        spec.Volumes.Add(ServiceMount.FromShortSyntax("/host:/app:ro"));
 
         var args = CliCommandBuilder.BuildRunArguments(spec);
 
@@ -152,6 +153,26 @@ public sealed class CliCommandBuilderTests
         Assert.Contains("-v proj_data:/var/lib", args);
         Assert.Contains("-v /host:/app:ro", args);
         Assert.EndsWith("nginx", args);
+    }
+
+    [Fact]
+    public void BuildRunArguments_emits_tmpfs_and_mount_flag()
+    {
+        var spec = new ContainerRunSpec { Image = "nginx", Name = "proj-web" };
+        spec.Volumes.Add(ServiceMount.FromTmpfsShortSyntax("/run:size=64m,mode=1777"));
+        spec.Volumes.Add(new ServiceMount
+        {
+            Type = MountType.Volume,
+            Source = "proj_data",
+            Target = "/var/lib",
+            VolumeNocopy = true,
+        });
+
+        var args = CliCommandBuilder.BuildRunArguments(spec);
+
+        Assert.Contains("--tmpfs /run:size=64m,mode=1777", args);
+        Assert.Contains("--mount type=volume,source=proj_data,target=/var/lib,volume-nocopy", args);
+        Assert.DoesNotContain("-v proj_data", args);
     }
 
     [Fact]

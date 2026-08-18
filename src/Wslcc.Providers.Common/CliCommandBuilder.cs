@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using Wslcc.Abstractions;
+using Wslcc.Abstractions.Compose;
 
 namespace Wslcc.Providers.Common;
 
@@ -127,7 +128,10 @@ public static class CliCommandBuilder
         }
     }
 
-    /// <summary>Compose file — ports / volumes: short syntax passes straight through to <c>-p</c> / <c>-v</c>.</summary>
+    /// <summary>
+    /// Compose file — ports / volumes / tmpfs: ports as <c>-p</c>; mounts as <c>-v</c>, <c>--mount</c>, or
+    /// <c>--tmpfs</c> depending on type and option blocks.
+    /// </summary>
     private static void AppendPortsAndVolumes(List<string> args, ContainerRunSpec spec)
     {
         foreach (var port in spec.Ports)
@@ -136,12 +140,103 @@ public static class CliCommandBuilder
             args.Add(port);
         }
 
-        foreach (var volume in spec.Volumes)
-        {
-            args.Add("-v");
-            args.Add(volume);
-        }
+        foreach (var mount in spec.Volumes)
+            AppendMount(args, mount);
     }
+
+    private static void AppendMount(List<string> args, ServiceMount mount)
+    {
+        if (mount.Type is MountType.Tmpfs)
+        {
+            args.Add("--tmpfs");
+            args.Add(FormatTmpfs(mount));
+            return;
+        }
+
+        if (mount.RequiresMountFlag)
+        {
+            args.Add("--mount");
+            args.Add(FormatMountFlag(mount));
+            return;
+        }
+
+        args.Add("-v");
+        args.Add(FormatVolumeShort(mount));
+    }
+
+    /// <summary>Formats a plain volume/bind for <c>-v</c> (<c>source:target[:mode]</c> or anonymous target).</summary>
+    private static string FormatVolumeShort(ServiceMount mount)
+    {
+        if (string.IsNullOrEmpty(mount.Source))
+            return mount.Target;
+
+        var modes = new List<string>();
+        if (mount.ReadOnly)
+            modes.Add("ro");
+
+        // SELinux relabel flags are short-syntax only on docker run -v (not --mount).
+        if (!string.IsNullOrEmpty(mount.BindSelinux))
+            modes.Add(mount.BindSelinux);
+
+        return modes.Count == 0
+            ? $"{mount.Source}:{mount.Target}"
+            : $"{mount.Source}:{mount.Target}:{string.Join(',', modes)}";
+    }
+
+    private static string FormatMountFlag(ServiceMount mount)
+    {
+        var parts = new List<string>
+        {
+            $"type={MountTypeName(mount.Type)}",
+        };
+
+        if (!string.IsNullOrEmpty(mount.Source))
+            parts.Add($"source={mount.Source}");
+
+        parts.Add($"target={mount.Target}");
+
+        if (mount.ReadOnly)
+            parts.Add("readonly");
+
+        if (mount.VolumeNocopy == true)
+            parts.Add("volume-nocopy");
+
+        if (!string.IsNullOrEmpty(mount.VolumeSubpath))
+            parts.Add($"volume-subpath={mount.VolumeSubpath}");
+
+        if (!string.IsNullOrEmpty(mount.BindPropagation))
+            parts.Add($"bind-propagation={mount.BindPropagation}");
+
+        if (!string.IsNullOrEmpty(mount.BindRecursive))
+            parts.Add($"bind-recursive={mount.BindRecursive}");
+
+        return string.Join(',', parts);
+    }
+
+    private static string FormatTmpfs(ServiceMount mount)
+    {
+        var opts = new List<string>();
+        if (!string.IsNullOrEmpty(mount.TmpfsSize))
+            opts.Add($"size={mount.TmpfsSize}");
+
+        if (!string.IsNullOrEmpty(mount.TmpfsMode))
+            opts.Add($"mode={mount.TmpfsMode}");
+
+        if (!string.IsNullOrEmpty(mount.TmpfsExtraOptions))
+            opts.Add(mount.TmpfsExtraOptions);
+
+        if (mount.ReadOnly)
+            opts.Add("ro");
+
+        return opts.Count == 0 ? mount.Target : $"{mount.Target}:{string.Join(',', opts)}";
+    }
+
+    private static string MountTypeName(MountType type) => type switch
+    {
+        MountType.Bind => "bind",
+        MountType.Tmpfs => "tmpfs",
+        _ => "volume",
+    };
 
     /// <summary>
     /// Compose file — user / working_dir / entrypoint / restart. Only the first entrypoint token can be

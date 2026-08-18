@@ -878,7 +878,7 @@ volumes:
 
 Common fields are `type`, `source` (not used by `tmpfs`), `target`, `read_only`, and `consistency`; then exactly one of the `volume` / `bind` / `tmpfs` / `image` option blocks, matching `type`.
 
-***WSLCC note:*** only the short syntax is accepted today; a long-form entry fails the load with an explicit error. Declared named volumes are created as `<project>_<name>`, while `external: true` volumes keep their bare name ([§10.1](#sec-10-1)).
+***WSLCC note:*** short syntax and long-form `type: volume` / `bind` / `tmpfs` are applied (`-v`, `--mount`, or `--tmpfs`). Long-form `type: npipe`, `cluster`, and `image` fail the load with an explicit error. Declared named volumes are created as `<project>_<name>`, while `external: true` volumes keep their bare name ([§10.1](#sec-10-1)).
 
 <a id="sec-4-7-2"></a>
 #### 4.7.2 `volumes_from`
@@ -906,6 +906,8 @@ tmpfs:                        # list, with optional per-mount options
 ```
 
 The two usual reasons are speed (scratch space for a build or a cache) and secrecy (never persisting decrypted material). It pairs naturally with `read_only: true` ([§4.11.5](#sec-4-11-5)), which otherwise breaks images that expect to write to `/tmp` or `/run`. For finer control, use the long-form `type: tmpfs` mount in [§4.7.1](#sec-4-7-1).
+
+***WSLCC note:*** applied as `run --tmpfs` (including `size=` / `mode=` suffixes). Long-form `volumes:` with `type: tmpfs` is also applied.
 
 <a id="sec-4-8"></a>
 <a id="startup-order-and-health"></a>
@@ -1241,7 +1243,7 @@ volumes:
 
 This turns "the attacker wrote a binary into the image" into an immediate failure, and it makes the container's writable surface explicit. Most images need a few writable paths anyway, so pair it with `tmpfs:` ([§4.7.3](#sec-4-7-3)) for scratch space and named volumes for anything that must persist.
 
-***WSLCC note:*** `read_only: true` is emitted as `--read-only`. Writable paths still need bind or named volumes — service `tmpfs:` is not applied yet.
+***WSLCC note:*** `read_only: true` is emitted as `--read-only`. Writable paths still need bind or named volumes, or `tmpfs:` / long-form `type: tmpfs` (both applied as `--tmpfs`).
 
 <a id="sec-4-11-6"></a>
 #### 4.11.6 `userns_mode`

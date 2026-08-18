@@ -29,7 +29,8 @@ No version has been tagged or published yet; everything below is under developme
 
 ### Fixed
 - `compose pull` skips build-only services (no `image:`) instead of reporting them as failed.
-- Long-form `ports:` / `volumes:` map entries are rejected with a clear error instead of being coerced into a garbage runtime argument.
+- Long-form `ports:` map entries are rejected with a clear error instead of being coerced into a garbage runtime argument.
 - String `command:` / `entrypoint:` use Compose shell form (`/bin/sh -c "…"`) instead of a single argv token.
 - Service `user:`, `working_dir:`, `labels:`, `entrypoint:`, `env_file:`, `container_name:`, `hostname:`, and `read_only:` are applied at runtime (no longer silent no-ops).
+- Service `tmpfs:` and long-form `volumes:` with `type: volume` / `bind` / `tmpfs` (including nested option blocks) are applied as `-v` / `--mount` / `--tmpfs`. Unsupported types (`npipe`, `cluster`, `image`) fail the load with a clear error.
 
