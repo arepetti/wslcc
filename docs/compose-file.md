@@ -66,8 +66,8 @@ Legacy aliases (`#resolution-features`, `#service-reference`, `#profiles`, `#sta
 ### 2.1 Two-stage pipeline
 Resolution uses the single `Wslcc.Compose` library in two stages:
 
-1. **Client-side** (`ComposeLoader`, in the CLI): multi-file merge, `.env` + `${VAR}` interpolation, `extends` expansion, profile filtering — then re-serialize the result as one YAML document.
-2. **Daemon-side** (`ComposeFileParser`): parse that single document into the typed model used by `ComposeEngine`. By this point profiles and `extends` no longer exist.
+1. **Client-side** (`ComposeLoader`, in the CLI): multi-file merge, `.env` + `${VAR}` interpolation, `include` and `extends` expansion, profile filtering — then re-serialize the result as one YAML document.
+2. **Daemon-side** (`ComposeFileParser`): parse that single document into the typed model used by `ComposeEngine`. By this point profiles, `include`, and `extends` no longer exist.
 
 `wslcc compose config` runs stage 1 only and prints exactly what every other command will send to `wslccd`. It is the fastest way to see what your file actually resolves to.
 
@@ -106,7 +106,7 @@ Values come from the process environment overlaid on a `.env` file; the process 
 
 `.env` grammar: one `KEY=VALUE` per line, an optional leading `export`, `#` comments, single quotes (fully literal), double quotes (C-style escapes plus `${VAR}` expansion), multi-line quoted values, and self-references to variables defined earlier in the same file. A variable that is unset and has no default resolves to the empty string and emits a warning.
 
-`--no-interpolate` leaves `${VAR}` verbatim in the output while still merging files, expanding `extends`, and filtering profiles.
+`--no-interpolate` leaves `${VAR}` verbatim in the output while still merging files, expanding `include` and `extends`, and filtering profiles.
 
 ***WSLCC note:*** without `--env-file`, the default `.env` is read from the **current working directory**, or from `--project-directory` when that is set — not automatically from the directory of the first compose file.
 
@@ -230,7 +230,7 @@ Long-form fields:
 
 The key difference from `-f` is scoping: an included file resolves its own relative paths and its own variables against its own directory, whereas `-f` files are merged into a single document sharing one project directory. Included services join the parent project and must not collide with names already defined there.
 
-***WSLCC note:*** to compose across directories today, list the files with repeated `-f` and set `--project-directory` explicitly ([§2.2](#sec-2-2)).
+WSLCC resolves `include` on the client (the daemon never sees the key). Only local files are supported; Git, OCI, and HTTP URLs fail the load. Relative bind-mount, `env_file`, and `build` paths in the included file are rewritten to absolute paths so they stay correct under the parent's project directory.
 
 <a id="sec-3-10"></a>
 ### 3.10 Extension fields (`x-*`)
@@ -2147,7 +2147,7 @@ See [§3.10](#sec-3-10).
 
 <a id="sec-9-3"></a>
 ### 9.3 `include`
-See [§3.9](#sec-3-9). Under WSLCC today, compose across directories with repeated `-f` plus an explicit `--project-directory`.
+See [§3.9](#sec-3-9).
 
 <a id="sec-10"></a>
 ## 10 WSLCC runtime behavior

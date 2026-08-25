@@ -39,7 +39,28 @@ public static class ComposeExtends
         ArgumentException.ThrowIfNullOrWhiteSpace(filePath);
         ArgumentNullException.ThrowIfNull(loadInterpolated);
 
-        var graph = loadInterpolated(filePath);
+        return ResolveFile(filePath, loadInterpolated(filePath), loadInterpolated);
+    }
+
+    /// <summary>
+    /// Resolves <c>extends</c> in an already-loaded graph for <paramref name="filePath"/>. Other files
+    /// referenced by <c>extends.file</c> are still loaded through <paramref name="loadInterpolated"/>.
+    /// Used after <c>include</c> so services imported into this file are visible to same-file extends.
+    /// </summary>
+    public static object? ResolveFile(string filePath, object? graph, Func<string, object?> loadInterpolated)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(filePath);
+        ArgumentNullException.ThrowIfNull(loadInterpolated);
+
+        var fullPath = Path.GetFullPath(filePath);
+        object? Load(string path)
+        {
+            var full = Path.GetFullPath(path);
+            return string.Equals(full, fullPath, StringComparison.OrdinalIgnoreCase)
+                ? graph
+                : loadInterpolated(full);
+        }
+
         var root = YamlGraph.AsMap(graph);
         if (root is null)
             return graph;
@@ -49,7 +70,7 @@ public static class ComposeExtends
 
         var resolvedServices = new Dictionary<string, object?>(StringComparer.Ordinal);
         foreach (var name in services.Keys)
-            resolvedServices[name] = ResolveService(filePath, name, loadInterpolated, new HashSet<(string, string)>());
+            resolvedServices[name] = ResolveService(fullPath, name, Load, new HashSet<(string, string)>());
 
         var newRoot = new Dictionary<string, object?>(root, StringComparer.Ordinal)
         {

@@ -147,7 +147,7 @@ These select **which** files make up the project and **which** of its services/p
 
 **File discovery.** With no `-f`, `wslcc` looks for `COMPOSE_FILE` in the environment (paths separated by `COMPOSE_PATH_SEPARATOR`, defaulting to `;` on Windows); if that's unset too, it looks in the project directory for `compose.yaml`, then `compose.yml`, then `docker-compose.yaml`, then `docker-compose.yml`, using the first one found. A command that needs a project and finds none this way (no `-f`, no `COMPOSE_FILE`, no conventional file present, and — for commands where it would help — no `-p` either) fails with a clear "no compose file found" message rather than guessing.
 
-Resolution — merging files, loading `.env`, interpolating variables, resolving `extends`, and filtering by profile — happens entirely **on the client**, before anything is sent to `wslccd`: the daemon always receives one already-resolved document. `wslcc compose config` (below) shows you exactly that document.
+Resolution — merging files, loading `.env`, interpolating variables, resolving `include` and `extends`, and filtering by profile — happens entirely **on the client**, before anything is sent to `wslccd`: the daemon always receives one already-resolved document. `wslcc compose config` (below) shows you exactly that document.
 
 ### Project name and connection
 
@@ -329,7 +329,7 @@ Requires a project (`-f` or `-p`), and — like `start`/`stop`/`restart` — nee
 
 ### wslcc compose config
 
-Resolve the project's compose file(s) — merge, `.env`, interpolation, `extends`, profile filtering — and print (or inspect) the result. Runs **entirely client-side**; no daemon contact at all.
+Resolve the project's compose file(s) — merge, `.env`, interpolation, `include`, `extends`, profile filtering — and print (or inspect) the result. Runs **entirely client-side**; no daemon contact at all.
 
 ```
 wslcc compose config [--format <fmt>] [--services | --volumes | --images | --profiles | --hash <services>]
@@ -349,13 +349,13 @@ wslcc compose config [--format <fmt>] [--services | --volumes | --images | --pro
 
 **--hash** _services_ :   Print a per-service config hash instead of the full document. `*` for every service, or a comma-separated list of names.
 
-**--no-interpolate** :   Leave `${VAR}` references verbatim. Files are still merged, `extends` is still resolved, and profile filtering still runs.
+**--no-interpolate** :   Leave `${VAR}` references verbatim. Files are still merged, `include` and `extends` are still resolved, and profile filtering still runs.
 
 **-q, --quiet** :   Resolve and validate only; print nothing on success (non-zero exit on error). Useful in CI to lint a compose file without producing output.
 
 **-o, --output** _path_ :   Write the resolved document to a file instead of `stdout`.
 
-`--services`, `--volumes`, `--images`, `--profiles`, and `--hash` are mutually exclusive (pick at most one; with none, the full document is printed). The document — exactly what every other compose command would send to `wslccd`, plus the effective [project name](#project-name-and-connection) added as a leading `name:` — goes to `stdout` (or `-o`); resolver warnings (e.g. an unset interpolation variable) go to `stderr`, so `wslcc compose config > resolved.yaml` always captures a clean file. Because `extends` and profile-gated services are already resolved by this point, the output never contains an `extends:` key and only ever lists services active for the selected profiles. `--hash` is a WSLCC-specific SHA-256 of each service's canonical configuration (used by `up`'s [change detection](#change-detection)) — not Docker Compose's own config hash. `--resolve-image-digests` is not implemented, since `config` runs offline and pinning digests needs registry access.
+`--services`, `--volumes`, `--images`, `--profiles`, and `--hash` are mutually exclusive (pick at most one; with none, the full document is printed). The document — exactly what every other compose command would send to `wslccd`, plus the effective [project name](#project-name-and-connection) added as a leading `name:` — goes to `stdout` (or `-o`); resolver warnings (e.g. an unset interpolation variable) go to `stderr`, so `wslcc compose config > resolved.yaml` always captures a clean file. Because `include`, `extends`, and profile-gated services are already resolved by this point, the output never contains an `include:` or `extends:` key and only ever lists services active for the selected profiles. `--hash` is a WSLCC-specific SHA-256 of each service's canonical configuration (used by `up`'s [change detection](#change-detection)) — not Docker Compose's own config hash. `--resolve-image-digests` is not implemented, since `config` runs offline and pinning digests needs registry access.
 
 Full key-by-key detail on what gets resolved is in [compose-file.md §2](compose-file.md#sec-2).
 

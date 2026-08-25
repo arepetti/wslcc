@@ -26,7 +26,7 @@ public sealed class ComposeLoadOptions
     /// <summary>Process environment used for interpolation (overrides <c>.env</c>). Defaults to the real environment; injectable for tests.</summary>
     public IReadOnlyDictionary<string, string>? ProcessEnvironment { get; init; }
 
-    /// <summary>When <c>false</c>, <c>${VAR}</c> references are left verbatim (Compose's <c>--no-interpolate</c>). Files are still merged, <c>extends</c> resolved and profiles filtered.</summary>
+    /// <summary>When <c>false</c>, <c>${VAR}</c> references are left verbatim (Compose's <c>--no-interpolate</c>). Files are still merged, <c>include</c>/<c>extends</c> resolved and profiles filtered.</summary>
     public bool Interpolate { get; init; } = true;
 }
 
@@ -48,9 +48,9 @@ public sealed class ComposeLoadResult
 
 /// <summary>
 /// Resolves a Compose project on the client into a single document: it merges multiple files, loads
-/// <c>.env</c>, interpolates <c>${VAR}</c> references, resolves <c>extends</c>, and filters services by
-/// profile — then re-serializes the result. Files and environment are read where the CLI runs, so the
-/// daemon receives an already-resolved document (it may run elsewhere).
+/// <c>.env</c>, interpolates <c>${VAR}</c> references, resolves <c>include</c> and <c>extends</c>, and
+/// filters services by profile — then re-serializes the result. Files and environment are read where
+/// the CLI runs, so the daemon receives an already-resolved document (it may run elsewhere).
 /// </summary>
 /// <example>
 /// Resolving the project in the current directory and parsing the result:
@@ -85,7 +85,7 @@ public static class ComposeLoader
     /// <see cref="ComposeLoadOptions.WorkingDirectory"/> is null, empty or whitespace.
     /// </exception>
     /// <exception cref="ComposeLoadException">
-    /// No files were given, a compose file (or an <c>extends</c> target) is missing, or an explicit
+    /// No files were given, a compose file (or an <c>extends</c>/<c>include</c> target) is missing, or an explicit
     /// <c>--env-file</c> does not exist.
     /// </exception>
     public static ComposeLoadResult Load(ComposeLoadOptions options)
@@ -99,9 +99,12 @@ public static class ComposeLoader
 
         var warnings = new List<string>();
         var envDirectory = options.ProjectDirectory ?? options.WorkingDirectory;
-        var pool = BuildVariablePool(options, envDirectory, warnings);
+        var processEnvironment = options.ProcessEnvironment is { } provided
+            ? new Dictionary<string, string>(provided, StringComparer.Ordinal)
+            : CaptureProcessEnvironment();
+        var pool = BuildVariablePool(options, envDirectory, processEnvironment, warnings);
 
-        var merged = MergeFiles(options, pool, warnings);
+        var merged = MergeFiles(options, pool, processEnvironment, warnings);
 
         // Collected before filtering, so `config --profiles` can list profiles that are not active.
         var declaredProfiles = CollectDeclaredProfiles(merged);
@@ -126,13 +129,14 @@ public static class ComposeLoader
             ?? options.WorkingDirectory;
 
     /// <summary>
-    /// Loads every compose file, resolves its <c>extends</c>, and merges the results in override order
-    /// (later files win). Documents are cached by full path so an <c>extends</c> target referenced more
-    /// than once is read and interpolated only once.
+    /// Loads every compose file, resolves its <c>include</c> then <c>extends</c>, and merges the
+    /// results in override order (later files win). Documents are cached by full path so an
+    /// <c>extends</c> target referenced more than once is read and interpolated only once.
     /// </summary>
     private static object? MergeFiles(
         ComposeLoadOptions options,
         IReadOnlyDictionary<string, string> pool,
+        IReadOnlyDictionary<string, string> processEnvironment,
         List<string> warnings)
     {
         var interpolator = new VariableInterpolator(
@@ -144,7 +148,11 @@ public static class ComposeLoader
         object? merged = null;
         foreach (var file in options.Files)
         {
-            var resolved = ComposeExtends.ResolveFile(Path.GetFullPath(file), LoadInterpolated);
+            var full = Path.GetFullPath(file);
+            var interpolated = LoadInterpolated(full);
+            var withIncludes = ComposeInclude.Resolve(
+                interpolated, full, processEnvironment, options.Interpolate, warnings);
+            var resolved = ComposeExtends.ResolveFile(full, withIncludes, LoadInterpolated);
             merged = merged is null ? resolved : ComposeMerge.Merge(merged, resolved);
         }
 
@@ -214,12 +222,12 @@ public static class ComposeLoader
     /// The variables <c>${VAR}</c> references resolve against: the <c>.env</c> file overlaid by the
     /// process environment (which wins, matching docker-compose).
     /// </summary>
-    private static Dictionary<string, string> BuildVariablePool(ComposeLoadOptions options, string envDirectory, List<string> warnings)
+    private static Dictionary<string, string> BuildVariablePool(
+        ComposeLoadOptions options,
+        string envDirectory,
+        IReadOnlyDictionary<string, string> processEnvironment,
+        List<string> warnings)
     {
-        var processEnvironment = options.ProcessEnvironment is { } provided
-            ? new Dictionary<string, string>(provided, StringComparer.Ordinal)
-            : CaptureProcessEnvironment();
-
         var envValues = LoadEnvValues(options, envDirectory, processEnvironment, warnings);
 
         var pool = new Dictionary<string, string>(StringComparer.Ordinal);

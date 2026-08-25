@@ -40,7 +40,7 @@ Two rules that follow from the legend:
 | `volumes` | ⚠️ Partial | Only `driver` and `external` modeled; `name`, `labels`, `driver_opts` ignored. [Format](compose-file.md#sec-6) | 0.1 |
 | `configs` | ❌ Not read | Neither the top-level objects nor the service attachments are created. [Format](compose-file.md#sec-7) | |
 | `secrets` | ❌ Not read | Same as `configs`; move sensitive values to `environment` / `env_file` for now. [Format](compose-file.md#sec-8) | |
-| `include` | ❌ Not read | Use repeated `-f` plus an explicit `--project-directory`. [Format](compose-file.md#sec-3-9) | |
+| `include` | 🧩 Client-only | Local paths only (short form and long `path` / `project_directory` / `env_file`). Nested includes allowed; name collisions with the including file fail the load; Git/OCI/HTTP URLs are 🛑 rejected. [Format](compose-file.md#sec-3-9) | 0.1 |
 | `x-*` | ❌ Not read | Extension fields are ignored by design, never an error. YAML anchors declared under them still resolve at parse time. [Format](compose-file.md#sec-3-10) | |
 
 ---
@@ -207,6 +207,7 @@ Full command mapping: [cli-mapping.md#coming-from-docker-compose](cli-mapping.md
 | Interpolation | Process env overlays `.env` | Same idea; grammar documented in [compose-file.md §2.3](compose-file.md#sec-2-3) |
 | Profiles | List or string shorthand | **List form only** — `profiles: debug` (scalar) is treated as “no profiles” (service always on). Use `profiles: ["debug"]`. |
 | Profiled dependencies | Spec/tooling nuances | Disabled services are removed and `depends_on` refs pruned; dependencies are **not** auto-activated |
+| `include` | Nested project: own directory and `.env`; name clashes with the including file are errors | Same for local files. Git/OCI/HTTP include URLs fail the load. Relative bind/`env_file`/`build` paths in the included file are rewritten to absolute so the engine's single project directory still works. |
 
 ---
 
