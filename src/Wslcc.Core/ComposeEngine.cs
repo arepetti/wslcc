@@ -85,14 +85,23 @@ public sealed class ComposeEngine : IComposeEngine
             Progress = progress,
         };
 
-        // Compose file — depends_on: services start in dependency order.
-        foreach (var service in OrderServices(file))
+        try
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            await UpServiceAsync(run, service, cancellationToken).ConfigureAwait(false);
-        }
+            // Compose file — depends_on: services start in dependency order.
+            foreach (var service in OrderServices(file))
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                await UpServiceAsync(run, service, cancellationToken).ConfigureAwait(false);
+            }
 
-        return run.Results;
+            return run.Results;
+        }
+        finally
+        {
+            // Env-sourced secret temp files are only useful while a container is running.
+            if (run.StartedContainers.Count == 0)
+                TryDeleteSecretTempDirectory(projectName);
+        }
     }
 
     /// <summary>Everything the per-service steps of a single <see cref="UpAsync"/> call share.</summary>
@@ -266,6 +275,9 @@ public sealed class ComposeEngine : IComposeEngine
         // Compose file — volumes / tmpfs: resolve named volumes and bind sources; create_host_path mkdir.
         foreach (var mount in service.Volumes)
             spec.Volumes.Add(ResolveMount(run.File, run.ProjectName, run.BaseDirectory, mount));
+
+        // Compose file — secrets: bind the source file read-only at /run/secrets/<name> (or target).
+        AppendSecretMounts(spec, run.File, run.ProjectName, service, run.BaseDirectory);
 
         return (spec, networks);
     }
@@ -539,6 +551,8 @@ public sealed class ComposeEngine : IComposeEngine
         // volumes are kept unless explicitly requested, matching `docker compose down` (data is precious).
         await RemoveProjectResourcesAsync(provider, projectName, removeVolumes, results, progress, cancellationToken)
             .ConfigureAwait(false);
+
+        TryDeleteSecretTempDirectory(projectName);
 
         return results;
     }
@@ -1056,6 +1070,141 @@ public sealed class ComposeEngine : IComposeEngine
             return source;
 
         return Path.GetFullPath(Path.Combine(baseDirectory, source));
+    }
+
+    /// <summary>
+    /// Compose file — secrets: each attachment becomes a read-only bind of a host file (Compose's
+    /// non-Swarm path). <c>file:</c> is resolved like bind sources; <c>environment:</c> is written to a
+    /// temp file whose value comes from this process's environment (typically <c>wslccd</c>).
+    /// </summary>
+    private static void AppendSecretMounts(
+        ContainerRunSpec spec,
+        ComposeFile file,
+        string projectName,
+        ServiceSpec service,
+        string? baseDirectory)
+    {
+        var targets = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var attachment in service.Secrets)
+        {
+            if (!targets.Add(attachment.Target))
+            {
+                throw new ProviderException(
+                    $"service '{service.Name}': secret target '{attachment.Target}' is used more than once.");
+            }
+
+            spec.Volumes.Add(ResolveSecretMount(file, projectName, service, attachment, baseDirectory));
+        }
+    }
+
+    private static ServiceMount ResolveSecretMount(
+        ComposeFile file,
+        string projectName,
+        ServiceSpec service,
+        SecretAttachment attachment,
+        string? baseDirectory)
+    {
+        if (!file.Secrets.TryGetValue(attachment.Source, out var secret))
+        {
+            throw new ProviderException(
+                $"service '{service.Name}': secret '{attachment.Source}' is not declared in top-level 'secrets'.");
+        }
+
+        var hostPath = ResolveSecretHostPath(projectName, service, secret, baseDirectory);
+        if (!File.Exists(hostPath))
+        {
+            throw new ProviderException(
+                $"service '{service.Name}': secret '{secret.Name}' file not found: {hostPath}");
+        }
+
+        return new ServiceMount
+        {
+            Type = MountType.Bind,
+            Source = hostPath,
+            Target = attachment.Target,
+            ReadOnly = true,
+        };
+    }
+
+    private static string ResolveSecretHostPath(
+        string projectName,
+        ServiceSpec service,
+        SecretSpec secret,
+        string? baseDirectory)
+    {
+        if (!string.IsNullOrWhiteSpace(secret.File))
+            return ResolveBindSource(secret.File, baseDirectory);
+
+        if (string.IsNullOrWhiteSpace(secret.Environment))
+        {
+            throw new ProviderException(
+                $"service '{service.Name}': secret '{secret.Name}' has no 'file' or 'environment' source.");
+        }
+
+        var value = Environment.GetEnvironmentVariable(secret.Environment);
+        if (value is null)
+        {
+            throw new ProviderException(
+                $"service '{service.Name}': secret '{secret.Name}' environment variable '{secret.Environment}' is not set.");
+        }
+
+        var path = SecretTempFilePath(projectName, service.Name, secret.Name);
+        WriteSecretTempFile(path, value);
+        return path;
+    }
+
+    private static string SecretTempDirectory(string projectName)
+        => Path.Combine(Path.GetTempPath(), "wslcc-secrets", SanitizePathSegment(projectName));
+
+    private static string SecretTempFilePath(string projectName, string serviceName, string secretName)
+        => Path.Combine(
+            SecretTempDirectory(projectName),
+            SanitizePathSegment(serviceName),
+            SanitizePathSegment(secretName));
+
+    private static string SanitizePathSegment(string name)
+    {
+        var invalid = Path.GetInvalidFileNameChars();
+        var chars = name.Select(c => Array.IndexOf(invalid, c) >= 0 ? '_' : c).ToArray();
+        var sanitized = new string(chars).Trim();
+        return sanitized.Length > 0 ? sanitized : "_";
+    }
+
+    private static void WriteSecretTempFile(string path, string contents)
+    {
+        var directory = Path.GetDirectoryName(path);
+        if (!string.IsNullOrEmpty(directory))
+            Directory.CreateDirectory(directory);
+
+        File.WriteAllText(path, contents);
+        TryRestrictSecretFileAccess(path);
+    }
+
+    private static void TryRestrictSecretFileAccess(string path)
+    {
+        try
+        {
+            if (!OperatingSystem.IsWindows())
+                File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+        }
+        catch (Exception)
+        {
+            // Best-effort; the temp directory is already user-scoped on typical hosts.
+        }
+    }
+
+    private static void TryDeleteSecretTempDirectory(string projectName)
+    {
+        try
+        {
+            var directory = SecretTempDirectory(projectName);
+            if (Directory.Exists(directory))
+                Directory.Delete(directory, recursive: true);
+        }
+        catch (Exception)
+        {
+            // Best-effort cleanup of env-sourced secret files.
+        }
     }
 
     private static string ResolveVolumeSource(ComposeFile file, string projectName, string source)

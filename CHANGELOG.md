@@ -20,6 +20,7 @@ No version has been tagged or published yet; everything below is under developme
   - `up` creates the project's `networks:` and named `volumes:` (and a default network) and attaches each service, so services reach each other by name; `down` removes the project's networks, and `down --volumes`/`-v` also removes its named volumes.
 - Client-side compose file resolution: multi-file merge (`-f` repeatable, `COMPOSE_FILE`), `.env` (quotes, escapes, inline comments, multi-line and self-referencing values) and `${VAR}` interpolation (`--env-file`), `include` (local files; own project directory and env), `extends`, `profiles` (`--profile`, `COMPOSE_PROFILES`), and `--project-directory`.
 - Service `annotations:` (map and `KEY=VALUE` list) are passed to the runtime as `--annotation` (OCI annotations; not mixed into the label store).
+- Compose `secrets:` (top-level `file:` / `environment:`, service short and `source`/`target` form) are bind-mounted read-only at `/run/secrets/<name>` (or `target`). Swarm `external` secrets fail the load; `uid`/`gid`/`mode` and `build.secrets` are not applied.
 - Daemon commands: `daemon start`/`stop`/`status`, `daemon install`/`uninstall` (per-user autostart at logon, no elevation), and top-level `version`.
 - Options: `--no-color` (and `NO_COLOR`) on every command; `compose` commands use `--wslcc-host`/`--wslcc-provider`, while `version`/`daemon` commands use `-H`/`--host` (plus `--provider` on `daemon start`/`install` to set the daemon's default).
 - Targets `net10.0`.

@@ -22,7 +22,8 @@ Intentionally deferred work. **Milestones and sequencing** live in [roadmap.md](
 | Item | Priority | Size | Milestone | Issue | Notes |
 | --- | --- | --- | --- | --- | --- |
 | Structured `ports` long map form | **P2** | **M** | Later | | Ports long form still rejected; volumes long form (`volume`/`bind`/`tmpfs`) is applied |
-| `configs` / `secrets` / `deploy` | **P2** | **L** | Later | | Not read |
+| `configs` | **P2** | **M** | Later | | Same file-grant model as secrets; default target `/<name>`; `content:` source |
+| `deploy` | **P2** | **L** | Later | | Not read |
 | Multi-file unique-key merge for list attributes (Compose long-form ports/volumes by target) | **P2** | **M** | Later | | Exact-dedup only today |
 
 ## Compose engine

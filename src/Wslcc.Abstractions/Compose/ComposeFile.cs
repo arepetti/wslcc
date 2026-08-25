@@ -30,4 +30,7 @@ public sealed class ComposeFile
 
     /// <summary>Named volumes from the top-level <c>volumes:</c> section, keyed by volume name.</summary>
     public Dictionary<string, VolumeSpec> Volumes { get; set; } = new(StringComparer.Ordinal);
+
+    /// <summary>Secrets from the top-level <c>secrets:</c> section, keyed by secret name.</summary>
+    public Dictionary<string, SecretSpec> Secrets { get; set; } = new(StringComparer.Ordinal);
 }

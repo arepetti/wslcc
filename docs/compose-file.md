@@ -1718,6 +1718,8 @@ Short form mounts at `/run/secrets/<name>` with mode `0444`; long-form fields ar
 
 The reason to use secrets rather than `environment:` is exposure: environment variables show up in process listings, container inspection output, crash dumps, and child processes. A file read once at startup does not. Many images accept a `*_FILE` variable specifically to support this pattern.
 
+***WSLCC note:*** there is no Swarm secret store. WSLCC bind-mounts a host file read-only at the secret path (Compose's non-Swarm behavior). `environment:` is taken from **`wslccd`'s** process environment. `external: true` fails the load. `uid` / `gid` / `mode` are not applied.
+
 <a id="sec-4-16"></a>
 ### 4.16 Deploy, develop, scale, provider, models
 <a id="sec-4-16-1"></a>
@@ -2107,6 +2109,8 @@ secrets:
 | `labels` | Metadata on the secret object |
 
 Services grant themselves access through their own `secrets:` list ([§4.15.2](#sec-4-15-2)), where the default mount point is `/run/secrets/<name>`. Two practical notes: files referenced with `file:` are still plaintext on disk, so keep them out of version control; and `environment:` is only as private as the environment it reads from.
+
+***WSLCC note:*** `file:` paths resolve against the project directory like bind sources. `external` secrets are rejected. Support detail: [compatibility.md](compatibility.md).
 
 <a id="sec-9"></a>
 ## 9 Fragments, merge keys, and includes

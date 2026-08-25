@@ -69,12 +69,14 @@ public sealed class ComposeFileParser
         ParseSection(GetValue(map, "services"), file.Services, ParseService);
         ParseSection(GetValue(map, "networks"), file.Networks, ParseNetwork);
         ParseSection(GetValue(map, "volumes"), file.Volumes, ParseVolume);
+        ParseSection(GetValue(map, "secrets"), file.Secrets, ParseSecret);
+        ValidateSecretAttachments(file);
 
         return file;
     }
 
     /// <summary>
-    /// Parses a top-level map section (<c>services</c> / <c>networks</c> / <c>volumes</c>) into
+    /// Parses a top-level map section (<c>services</c> / <c>networks</c> / <c>volumes</c> / <c>secrets</c>) into
     /// <paramref name="target"/>, keyed by the entry's name. A missing section — or one that is not a
     /// map — leaves the target empty rather than failing the parse.
     /// </summary>
@@ -115,6 +117,7 @@ public sealed class ComposeFileParser
         service.Networks = ToKeyList(GetValue(map, "networks"));
         service.Labels = ToNonNullKeyValues(GetValue(map, "labels"));
         service.Annotations = ToNonNullKeyValues(GetValue(map, "annotations"));
+        service.Secrets = ParseSecretAttachments(GetValue(map, "secrets"), name);
 
         return service;
     }
@@ -517,6 +520,109 @@ public sealed class ComposeFileParser
             External = map is not null && GetBool(map, "external"),
         };
     }
+
+    /// <summary>
+    /// Compose file — secrets (top level): <c>file:</c> or <c>environment:</c>. A scalar is treated as
+    /// a file path. <c>external: true</c> is rejected (no Swarm secret store).
+    /// </summary>
+    private static SecretSpec ParseSecret(string name, object? value)
+    {
+        if (value is string filePath)
+        {
+            if (string.IsNullOrWhiteSpace(filePath))
+                throw new ComposeLoadException($"secret '{name}': 'file' path is empty.");
+
+            return new SecretSpec { Name = name, File = filePath };
+        }
+
+        var map = AsMap(value);
+        if (map is null)
+        {
+            throw new ComposeLoadException(
+                $"secret '{name}' must declare 'file' or 'environment' (a mapping, or a file path string).");
+        }
+
+        if (IsExternal(map))
+        {
+            throw new ComposeLoadException(
+                $"secret '{name}': 'external: true' is not supported (no Swarm secret store). Use 'file:' or 'environment:'.");
+        }
+
+        var file = GetString(map, "file");
+        var environment = GetString(map, "environment");
+        var hasFile = !string.IsNullOrWhiteSpace(file);
+        var hasEnvironment = !string.IsNullOrWhiteSpace(environment);
+        if (hasFile == hasEnvironment)
+        {
+            throw new ComposeLoadException(
+                $"secret '{name}' must declare exactly one of 'file' or 'environment'.");
+        }
+
+        return new SecretSpec { Name = name, File = hasFile ? file : null, Environment = hasEnvironment ? environment : null };
+    }
+
+    /// <summary>Compose file — secrets (service): a list of names or <c>{ source, target }</c> maps.</summary>
+    private static IList<SecretAttachment> ParseSecretAttachments(object? value, string serviceName)
+    {
+        var result = new List<SecretAttachment>();
+        if (value is null)
+            return result;
+
+        foreach (var item in AsList(value))
+        {
+            if (item is string name)
+            {
+                if (string.IsNullOrWhiteSpace(name))
+                    throw new ComposeLoadException($"service '{serviceName}': 'secrets' entry is empty.");
+
+                result.Add(new SecretAttachment { Source = name, Target = DefaultSecretTarget(name) });
+                continue;
+            }
+
+            var map = AsMap(item);
+            if (map is null)
+            {
+                throw new ComposeLoadException(
+                    $"service '{serviceName}': 'secrets' entries must be a name or a mapping with 'source'.");
+            }
+
+            var source = GetString(map, "source");
+            if (string.IsNullOrWhiteSpace(source))
+            {
+                throw new ComposeLoadException(
+                    $"service '{serviceName}': long-form 'secrets' entry must specify 'source'.");
+            }
+
+            var target = GetString(map, "target");
+            result.Add(new SecretAttachment
+            {
+                Source = source,
+                Target = string.IsNullOrWhiteSpace(target) ? DefaultSecretTarget(source) : target,
+            });
+        }
+
+        return result;
+    }
+
+    private static void ValidateSecretAttachments(ComposeFile file)
+    {
+        foreach (var service in file.Services.Values)
+        {
+            foreach (var attachment in service.Secrets)
+            {
+                if (!file.Secrets.ContainsKey(attachment.Source))
+                {
+                    throw new ComposeLoadException(
+                        $"service '{service.Name}': secret '{attachment.Source}' is not declared in top-level 'secrets'.");
+                }
+            }
+        }
+    }
+
+    private static string DefaultSecretTarget(string source) => "/run/secrets/" + source;
+
+    private static bool IsExternal(IDictionary<string, object?> map)
+        => GetBool(map, "external") || AsMap(GetValue(map, "external")) is not null;
 
     // --- YAML graph helpers -------------------------------------------------
 

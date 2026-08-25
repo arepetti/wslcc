@@ -415,4 +415,119 @@ public sealed class ComposeFileParserTests
 
         Assert.Contains("volume type is required", ex.Message);
     }
+
+    [Fact]
+    public void Parses_secrets_short_and_long_form()
+    {
+        const string yaml = """
+            services:
+              db:
+                image: postgres
+                secrets:
+                  - db_password
+                  - source: tls_key
+                    target: /etc/ssl/private/tls.key
+            secrets:
+              db_password:
+                file: ./secrets/db_password.txt
+              tls_key: ./certs/server.key
+            """;
+
+        var file = _parser.Parse(yaml);
+
+        Assert.Equal("./secrets/db_password.txt", file.Secrets["db_password"].File);
+        Assert.Equal("./certs/server.key", file.Secrets["tls_key"].File);
+
+        var db = file.Services["db"];
+        Assert.Equal(2, db.Secrets.Count);
+        Assert.Equal("db_password", db.Secrets[0].Source);
+        Assert.Equal("/run/secrets/db_password", db.Secrets[0].Target);
+        Assert.Equal("tls_key", db.Secrets[1].Source);
+        Assert.Equal("/etc/ssl/private/tls.key", db.Secrets[1].Target);
+    }
+
+    [Fact]
+    public void Parses_environment_sourced_secret()
+    {
+        const string yaml = """
+            services:
+              app:
+                image: app
+                secrets:
+                  - api_token
+            secrets:
+              api_token:
+                environment: API_TOKEN
+            """;
+
+        var file = _parser.Parse(yaml);
+
+        Assert.Equal("API_TOKEN", file.Secrets["api_token"].Environment);
+        Assert.Null(file.Secrets["api_token"].File);
+    }
+
+    [Fact]
+    public void Rejects_unknown_secret_source()
+    {
+        const string yaml = """
+            services:
+              app:
+                image: app
+                secrets:
+                  - missing
+            secrets:
+              other:
+                file: ./other
+            """;
+
+        var ex = Assert.Throws<ComposeLoadException>(() => _parser.Parse(yaml));
+
+        Assert.Contains("secret 'missing' is not declared", ex.Message);
+    }
+
+    [Fact]
+    public void Rejects_external_secret()
+    {
+        const string yaml = """
+            services:
+              app:
+                image: app
+            secrets:
+              corp:
+                external: true
+            """;
+
+        var ex = Assert.Throws<ComposeLoadException>(() => _parser.Parse(yaml));
+
+        Assert.Contains("external: true", ex.Message);
+        Assert.Contains("corp", ex.Message);
+    }
+
+    [Fact]
+    public void Rejects_external_secret_map_form()
+    {
+        const string yaml = """
+            secrets:
+              corp:
+                external:
+                  name: signing-key
+            """;
+
+        var ex = Assert.Throws<ComposeLoadException>(() => _parser.Parse(yaml));
+
+        Assert.Contains("external: true", ex.Message);
+    }
+
+    [Fact]
+    public void Rejects_secret_without_file_or_environment()
+    {
+        const string yaml = """
+            secrets:
+              empty: {}
+            """;
+
+        var ex = Assert.Throws<ComposeLoadException>(() => _parser.Parse(yaml));
+
+        Assert.Contains("exactly one of 'file' or 'environment'", ex.Message);
+    }
 }

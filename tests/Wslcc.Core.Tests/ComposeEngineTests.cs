@@ -1035,6 +1035,170 @@ public sealed class ComposeEngineTests
     }
 
     [Fact]
+    public async Task Up_binds_file_secret_read_only_at_run_secrets()
+    {
+        var dir = Directory.CreateTempSubdirectory();
+        try
+        {
+            var secretPath = Path.Combine(dir.FullName, "pw.txt");
+            await File.WriteAllTextAsync(secretPath, "s3cret");
+
+            var provider = new FakeProvider("docker", true);
+            var engine = new ComposeEngine(new[] { provider });
+            var file = new ComposeFile();
+            file.Secrets["db_password"] = new SecretSpec { Name = "db_password", File = "./pw.txt" };
+            file.Services["db"] = new ServiceSpec
+            {
+                Name = "db",
+                Image = "postgres",
+                Secrets = { new SecretAttachment { Source = "db_password", Target = "/run/secrets/db_password" } },
+            };
+
+            await engine.UpAsync("secrets-file", file, providerName: null, pull: false, buildPolicy: BuildPolicy.Auto, baseDirectory: dir.FullName);
+
+            var spec = Assert.Single(provider.RunSpecs);
+            var mount = Assert.Single(spec.Volumes);
+            Assert.Equal(MountType.Bind, mount.Type);
+            Assert.Equal(Path.GetFullPath(secretPath), mount.Source);
+            Assert.Equal("/run/secrets/db_password", mount.Target);
+            Assert.True(mount.ReadOnly);
+        }
+        finally
+        {
+            dir.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Up_writes_environment_secret_to_temp_file()
+    {
+        const string envName = "WSLCC_TEST_SECRET_TOKEN";
+        Environment.SetEnvironmentVariable(envName, "from-env");
+        try
+        {
+            var provider = new FakeProvider("docker", true);
+            var engine = new ComposeEngine(new[] { provider });
+            var file = new ComposeFile();
+            file.Secrets["api_token"] = new SecretSpec { Name = "api_token", Environment = envName };
+            file.Services["app"] = new ServiceSpec
+            {
+                Name = "app",
+                Image = "app",
+                Secrets = { new SecretAttachment { Source = "api_token", Target = "/run/secrets/api_token" } },
+            };
+
+            await engine.UpAsync("secrets-env", file, providerName: null, pull: false, buildPolicy: BuildPolicy.Auto, baseDirectory: null);
+
+            var spec = Assert.Single(provider.RunSpecs);
+            var mount = Assert.Single(spec.Volumes);
+            Assert.Equal("/run/secrets/api_token", mount.Target);
+            Assert.True(mount.ReadOnly);
+            Assert.True(File.Exists(mount.Source));
+            Assert.Equal("from-env", File.ReadAllText(mount.Source!));
+            Assert.Contains(Path.Combine("wslcc-secrets", "secrets-env"), mount.Source);
+
+            await engine.DownAsync("secrets-env", file, providerName: null);
+            Assert.False(Directory.Exists(Path.Combine(Path.GetTempPath(), "wslcc-secrets", "secrets-env")));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(envName, null);
+        }
+    }
+
+    [Fact]
+    public async Task Up_reports_missing_secret_file()
+    {
+        var dir = Directory.CreateTempSubdirectory();
+        try
+        {
+            var provider = new FakeProvider("docker", true);
+            var engine = new ComposeEngine(new[] { provider });
+            var file = new ComposeFile();
+            file.Secrets["db_password"] = new SecretSpec { Name = "db_password", File = "./missing.txt" };
+            file.Services["db"] = new ServiceSpec
+            {
+                Name = "db",
+                Image = "postgres",
+                Secrets = { new SecretAttachment { Source = "db_password", Target = "/run/secrets/db_password" } },
+            };
+
+            var results = await engine.UpAsync("secrets-missing", file, providerName: null, pull: false, buildPolicy: BuildPolicy.Auto, baseDirectory: dir.FullName);
+
+            var failed = Assert.Single(results);
+            Assert.Equal("failed", failed.Status);
+            Assert.Contains("file not found", failed.Error);
+            Assert.Empty(provider.RunSpecs);
+        }
+        finally
+        {
+            dir.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Up_reports_unset_secret_environment_variable()
+    {
+        const string envName = "WSLCC_TEST_SECRET_UNSET";
+        Environment.SetEnvironmentVariable(envName, null);
+
+        var provider = new FakeProvider("docker", true);
+        var engine = new ComposeEngine(new[] { provider });
+        var file = new ComposeFile();
+        file.Secrets["api_token"] = new SecretSpec { Name = "api_token", Environment = envName };
+        file.Services["app"] = new ServiceSpec
+        {
+            Name = "app",
+            Image = "app",
+            Secrets = { new SecretAttachment { Source = "api_token", Target = "/run/secrets/api_token" } },
+        };
+
+        var results = await engine.UpAsync("secrets-unset", file, providerName: null, pull: false, buildPolicy: BuildPolicy.Auto, baseDirectory: null);
+
+        var failed = Assert.Single(results);
+        Assert.Equal("failed", failed.Status);
+        Assert.Contains("is not set", failed.Error);
+        Assert.Empty(provider.RunSpecs);
+    }
+
+    [Fact]
+    public async Task Up_reports_duplicate_secret_targets()
+    {
+        var dir = Directory.CreateTempSubdirectory();
+        try
+        {
+            await File.WriteAllTextAsync(Path.Combine(dir.FullName, "a.txt"), "a");
+            await File.WriteAllTextAsync(Path.Combine(dir.FullName, "b.txt"), "b");
+
+            var provider = new FakeProvider("docker", true);
+            var engine = new ComposeEngine(new[] { provider });
+            var file = new ComposeFile();
+            file.Secrets["a"] = new SecretSpec { Name = "a", File = "./a.txt" };
+            file.Secrets["b"] = new SecretSpec { Name = "b", File = "./b.txt" };
+            file.Services["app"] = new ServiceSpec
+            {
+                Name = "app",
+                Image = "app",
+                Secrets =
+                {
+                    new SecretAttachment { Source = "a", Target = "/run/secrets/shared" },
+                    new SecretAttachment { Source = "b", Target = "/run/secrets/shared" },
+                },
+            };
+
+            var results = await engine.UpAsync("secrets-dup", file, providerName: null, pull: false, buildPolicy: BuildPolicy.Auto, baseDirectory: dir.FullName);
+
+            var failed = Assert.Single(results);
+            Assert.Equal("failed", failed.Status);
+            Assert.Contains("used more than once", failed.Error);
+        }
+        finally
+        {
+            dir.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task Down_removes_project_networks_but_keeps_volumes_by_default()
     {
         var provider = new FakeProvider("docker", true);

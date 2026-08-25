@@ -39,7 +39,7 @@ Two rules that follow from the legend:
 | `networks` | ⚠️ Partial | Only `driver` and `external` modeled; `name`, `ipam`, `internal`, `attachable`, `labels`, `driver_opts` ignored. [Format](compose-file.md#sec-5) | 0.1 |
 | `volumes` | ⚠️ Partial | Only `driver` and `external` modeled; `name`, `labels`, `driver_opts` ignored. [Format](compose-file.md#sec-6) | 0.1 |
 | `configs` | ❌ Not read | Neither the top-level objects nor the service attachments are created. [Format](compose-file.md#sec-7) | |
-| `secrets` | ❌ Not read | Same as `configs`; move sensitive values to `environment` / `env_file` for now. [Format](compose-file.md#sec-8) | |
+| `secrets` | ⚠️ Partial | `file:` and `environment:` are bind-mounted read-only (default `/run/secrets/<name>`); `external: true` is 🛑 rejected (no Swarm secret store). `name:`, `labels`, and uid/gid/mode are not applied. [Format](compose-file.md#sec-8) | 0.1 |
 | `include` | 🧩 Client-only | Local paths only (short form and long `path` / `project_directory` / `env_file`). Nested includes allowed; name collisions with the including file fail the load; Git/OCI/HTTP URLs are 🛑 rejected. [Format](compose-file.md#sec-3-9) | 0.1 |
 | `x-*` | ❌ Not read | Extension fields are ignored by design, never an error. YAML anchors declared under them still resolve at parse time. [Format](compose-file.md#sec-3-10) | |
 
@@ -125,7 +125,7 @@ Every service attribute, alphabetically. “Format” links to the syntax and ne
 | `restart` | ⚠️ Partial | Passed through as `--restart`. Accepted by the `docker` provider; the preview `wslc` provider may reject the flag ([providers.md](providers.md)). | [4.9.1](compose-file.md#sec-4-9-1) | 0.1 |
 | `runtime` | ❌ Not read | Alternative OCI runtimes not selected. | [4.14.5](compose-file.md#sec-4-14-5) | |
 | `scale` | ❌ Not read | One container per service; no replicas. | [4.16.3](compose-file.md#sec-4-16-3) | |
-| `secrets` | ❌ Not read | Requires top-level `secrets`, also unread. | [4.15.2](compose-file.md#sec-4-15-2) | |
+| `secrets` | ⚠️ Partial | Short form and `source`/`target` become read-only binds; `uid`/`gid`/`mode` ignored. Unknown `source` and Swarm `external` secrets fail the load. | [4.15.2](compose-file.md#sec-4-15-2) | 0.1 |
 | `security_opt` | ❌ Not read | **`no-new-privileges`, seccomp, and AppArmor overrides have no effect.** | [4.11.4](compose-file.md#sec-4-11-4) | |
 | `shm_size` | ❌ Not read | `/dev/shm` keeps the runtime default (usually 64 MB). | [4.12.21](compose-file.md#sec-4-12-21) | |
 | `stdin_open` | ❌ Not read | No `-i`. | [4.3.8](compose-file.md#sec-4-3-8) | |
@@ -158,6 +158,7 @@ The ⚠️ rows are the ones that reward a closer look, because they accept your
 | `networks` (service) | Which networks the service joins | `aliases`, `ipv4_address`, `ipv6_address`, `link_local_ips`, `mac_address`, `priority`, `gw_priority`, `driver_opts`, `interface_name` |
 | `networks` (top level) | `driver`, `external` | `name`, `ipam` (subnets, gateways), `internal`, `attachable`, `labels`, `driver_opts`, `enable_ipv4`/`enable_ipv6` |
 | `volumes` (top level) | `driver`, `external` | `name`, `labels`, `driver_opts` |
+| `secrets` (top level + service) | `file:` / `environment:` sources; short and long-form attachments (`source` / `target`); bind-mounted read-only at `/run/secrets/<name>` or `target` | `external: true` (and `external: { name: … }`) → hard error; `name:`, `labels`, `uid`/`gid`/`mode`; `build.secrets` still unread |
 | `restart` | The value, passed to the provider as `--restart` | Nothing in the value itself; the `wslc` preview provider may refuse the flag |
 | `depends_on` | `condition`, `required`, short list form | `restart: true`; unknown `condition` values silently become `service_started` |
 | `healthcheck` | `test`, `interval`, `timeout`, `retries`, `start_period`, `disable` | `start_interval`; `CMD` vs `CMD-SHELL` distinction (both flatten to a shell command) |
@@ -231,7 +232,7 @@ These are the ones that bite when you reuse an existing file: WSLCC may accept t
 
 ### Not read at all (silently dropped)
 
-Every key marked ❌ in the [service key matrix](#service-keys) above. In practice the ones that hurt are `configs`, `secrets`, `deploy`, `privileged`, `cap_add`, `cap_drop`, `security_opt`, `devices`, `ulimits`, `extra_hosts`, `dns`, `domainname`, `shm_size`, `pids_limit`, `mem_limit`, `cpus`, `init`, `stdin_open`, `tty`, `network_mode`, `pid`, `ipc`, `uts`, `stop_grace_period`, `stop_signal`, `expose`, `volumes_from`, `links`, `logging`, and `scale` / `deploy.replicas`.
+Every key marked ❌ in the [service key matrix](#service-keys) above. In practice the ones that hurt are `configs`, `deploy`, `privileged`, `cap_add`, `cap_drop`, `security_opt`, `devices`, `ulimits`, `extra_hosts`, `dns`, `domainname`, `shm_size`, `pids_limit`, `mem_limit`, `cpus`, `init`, `stdin_open`, `tty`, `network_mode`, `pid`, `ipc`, `uts`, `stop_grace_period`, `stop_signal`, `expose`, `volumes_from`, `links`, `logging`, and `scale` / `deploy.replicas`.
 
 **Security note:** `user:` and `read_only:` are applied. Other hardening keys are not — `privileged:`, `cap_drop:`, `security_opt:`, `userns_mode:` all have **no effect**. Do not assume YAML you trusted under Compose still enforces those unread constraints under WSLCC.
 
@@ -279,7 +280,7 @@ Merge rules as implemented: [compose-file.md §2.2](compose-file.md#sec-2-2). Tr
    wslcc compose config
    wslcc compose config --hash "*"
    ```
-4. Search your compose files for: long-form `ports`, unsupported volume types (`npipe` / `cluster` / `image`), `configs`/`secrets`/`deploy`, `privileged` / `cap_*` / `security_opt`, resource limits (`mem_limit`, `cpus`, `ulimits`), and bare `environment` keys you expect from your shell (those inherit from `wslccd`, not your client shell).
+4. Search your compose files for: long-form `ports`, unsupported volume types (`npipe` / `cluster` / `image`), `configs`/`deploy`, `privileged` / `cap_*` / `security_opt`, resource limits (`mem_limit`, `cpus`, `ulimits`), `secrets.external`, and bare `environment` keys you expect from your shell (those inherit from `wslccd`, not your client shell).
 5. Cross-check each hit against the [service key matrix](#service-keys): long-form `ports` and unsupported volume types fail loudly; unread keys fail silently.
 6. Pass `-f` for overrides explicitly; use `--project-directory` if you invoke from another cwd (also affects `env_file:` / bind / build path resolution).
 7. Bring the stack up under WSLCC (`up -d`), verify with `wslcc compose ps` — not `docker compose ps`.

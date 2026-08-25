@@ -105,4 +105,10 @@ public sealed class ServiceSpec
 
     /// <summary>Compose <c>read_only:</c> — mount the container root filesystem read-only.</summary>
     public bool ReadOnly { get; set; }
+
+    /// <summary>
+    /// Compose <c>secrets:</c> — grants of top-level secrets, mounted as files (default
+    /// <c>/run/secrets/&lt;name&gt;</c>).
+    /// </summary>
+    public IList<SecretAttachment> Secrets { get; set; } = new List<SecretAttachment>();
 }
