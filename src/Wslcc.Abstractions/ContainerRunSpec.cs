@@ -51,6 +51,12 @@ public sealed class ContainerRunSpec
     public IDictionary<string, string> Labels { get; } = new Dictionary<string, string>(StringComparer.Ordinal);
 
     /// <summary>
+    /// OCI annotations passed through to the runtime (<c>--annotation</c>). Distinct from
+    /// <see cref="Labels"/>; WSLCC does not inject its own keys here.
+    /// </summary>
+    public IDictionary<string, string> Annotations { get; } = new Dictionary<string, string>(StringComparer.Ordinal);
+
+    /// <summary>
     /// Environment variables to set. A <c>null</c> value means "pass the name through" so the runtime
     /// inherits the value from the host.
     /// </summary>

@@ -70,7 +70,7 @@ public static class CliCommandBuilder
         return Join(args);
     }
 
-    /// <summary>Compose file — container_name / labels: the container's name and its label set.</summary>
+    /// <summary>Compose file — container_name / labels / annotations: name, labels, and OCI annotations.</summary>
     private static void AppendIdentity(List<string> args, ContainerRunSpec spec)
     {
         if (spec.Detach)
@@ -86,6 +86,12 @@ public static class CliCommandBuilder
         {
             args.Add("--label");
             args.Add($"{label.Key}={label.Value}");
+        }
+
+        foreach (var annotation in spec.Annotations)
+        {
+            args.Add("--annotation");
+            args.Add($"{annotation.Key}={annotation.Value}");
         }
     }
 

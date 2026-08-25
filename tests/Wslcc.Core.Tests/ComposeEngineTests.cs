@@ -388,6 +388,7 @@ public sealed class ComposeEngineTests
                 EnvFile = { new EnvFileSpec { Path = "app.env" } },
             };
             file.Services["web"].Labels["com.example.team"] = "platform";
+            file.Services["web"].Annotations["org.opencontainers.image.source"] = "https://github.com/acme/api";
             file.Services["web"].Environment["NODE_ENV"] = "production";
 
             await engine.UpAsync("proj", file, providerName: null, pull: false, buildPolicy: BuildPolicy.Never, baseDirectory: dir);
@@ -401,6 +402,9 @@ public sealed class ComposeEngineTests
             Assert.Equal("platform", web.Labels["com.example.team"]);
             Assert.Equal("proj", web.Labels[WslccLabels.Project]);
             Assert.Equal("web", web.Labels[WslccLabels.Service]);
+            Assert.Equal("https://github.com/acme/api", web.Annotations["org.opencontainers.image.source"]);
+            Assert.False(web.Annotations.ContainsKey(WslccLabels.Project));
+            Assert.False(web.Annotations.ContainsKey(WslccLabels.Service));
             Assert.Equal(new[] { "/bin/sh", "-c", "echo hi" }, web.Entrypoint);
             Assert.Equal(Path.GetFullPath(envPath), Assert.Single(web.EnvFiles));
             Assert.Equal("production", web.Environment["NODE_ENV"]);

@@ -237,6 +237,45 @@ public sealed class ComposeFileParserTests
     }
 
     [Fact]
+    public void Parses_annotations_map_form_including_empty_value()
+    {
+        const string yaml = """
+            services:
+              web:
+                image: busybox
+                annotations:
+                  org.opencontainers.image.source: https://github.com/acme/api
+                  com.example.empty: ""
+            """;
+
+        var file = _parser.Parse(yaml);
+        var web = file.Services["web"];
+
+        Assert.Equal("https://github.com/acme/api", web.Annotations["org.opencontainers.image.source"]);
+        Assert.Equal("", web.Annotations["com.example.empty"]);
+        Assert.Empty(web.Labels);
+    }
+
+    [Fact]
+    public void Parses_annotations_list_form()
+    {
+        const string yaml = """
+            services:
+              web:
+                image: busybox
+                annotations:
+                  - org.opencontainers.image.source=https://github.com/acme/api
+                  - com.example.note=hello world
+            """;
+
+        var file = _parser.Parse(yaml);
+        var web = file.Services["web"];
+
+        Assert.Equal("https://github.com/acme/api", web.Annotations["org.opencontainers.image.source"]);
+        Assert.Equal("hello world", web.Annotations["com.example.note"]);
+    }
+
+    [Fact]
     public void Rejects_map_command()
     {
         const string yaml = """

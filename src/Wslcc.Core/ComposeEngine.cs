@@ -1435,6 +1435,7 @@ public sealed class ComposeEngine : IComposeEngine
         };
 
         ApplyLabels(spec, projectName, service);
+        ApplyAnnotations(spec, service);
         ApplyEnvironment(spec, service, baseDirectory);
         ApplyPortsAndProcess(spec, service);
 
@@ -1452,6 +1453,15 @@ public sealed class ComposeEngine : IComposeEngine
 
         spec.Labels[WslccLabels.Project] = projectName;
         spec.Labels[WslccLabels.Service] = service.Name;
+    }
+
+    /// <summary>
+    /// Compose file — annotations: OCI annotations are copied as-is. WSLCC identity stays on labels.
+    /// </summary>
+    private static void ApplyAnnotations(ContainerRunSpec spec, ServiceSpec service)
+    {
+        foreach (var annotation in service.Annotations)
+            spec.Annotations[annotation.Key] = annotation.Value;
     }
 
     /// <summary>

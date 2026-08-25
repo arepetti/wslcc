@@ -85,6 +85,12 @@ public sealed class ServiceSpec
     /// <summary>Compose <c>labels:</c> applied to the container, alongside the wslcc labels the engine adds.</summary>
     public IDictionary<string, string> Labels { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
 
+    /// <summary>
+    /// Compose <c>annotations:</c> — OCI annotations on the container (map or <c>KEY=VALUE</c> list).
+    /// Distinct from <see cref="Labels"/>; the engine does not inject <c>wslcc.*</c> keys here.
+    /// </summary>
+    public IDictionary<string, string> Annotations { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+
     /// <summary>Compose <c>restart:</c> policy (e.g. <c>always</c>, <c>unless-stopped</c>).</summary>
     public string? Restart { get; set; }
 

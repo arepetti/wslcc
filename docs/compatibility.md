@@ -51,7 +51,7 @@ Every service attribute, alphabetically. “Format” links to the syntax and ne
 
 | Key | Status | Note | Format | Introduced in |
 | --- | --- | --- | --- | --- |
-| `annotations` | ❌ Not read | OCI annotations are not applied. | [4.10.4](compose-file.md#sec-4-10-4) | |
+| `annotations` | ✅ Applied | Map and list forms, passed as `--annotation`. Docker Engine 25+; preview `wslc` may reject the flag ([providers.md](providers.md)). Distinct from `labels` — WSLCC does not inject `wslcc.*` keys here. | [4.10.4](compose-file.md#sec-4-10-4) | 0.1 |
 | `attach` | ❌ Not read | Output streaming is not configurable per service. | [4.3.10](compose-file.md#sec-4-3-10) | |
 | `blkio_config` | ❌ Not read | No block-IO weights or per-device limits. | [4.12.17](compose-file.md#sec-4-12-17) | |
 | `build` | ⚠️ Partial | String form, or map with `context` / `dockerfile` / `target` / `args`. All other build fields ignored. | [4.2.2](compose-file.md#sec-4-2-2) | 0.1 |

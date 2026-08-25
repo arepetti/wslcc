@@ -36,6 +36,17 @@ public sealed class CliCommandBuilderTests
     }
 
     [Fact]
+    public void BuildRunArguments_quotes_annotation_values_with_spaces()
+    {
+        var spec = new ContainerRunSpec { Image = "busybox", Name = "proj-svc" };
+        spec.Annotations["com.example.note"] = "hello world";
+
+        var args = CliCommandBuilder.BuildRunArguments(spec);
+
+        Assert.Contains("--annotation \"com.example.note=hello world\"", args);
+    }
+
+    [Fact]
     public void BuildRunArguments_appends_shell_form_command_after_image()
     {
         var spec = new ContainerRunSpec { Image = "busybox", Name = "proj-svc" };
@@ -62,6 +73,7 @@ public sealed class CliCommandBuilderTests
         };
         spec.Labels["com.example.team"] = "platform";
         spec.Labels["wslcc.project"] = "proj";
+        spec.Annotations["org.opencontainers.image.source"] = "https://github.com/acme/api";
         spec.EnvFiles.Add(@"C:\proj\a.env");
         spec.Environment["NODE_ENV"] = "production";
         spec.Entrypoint.Add("/bin/sh");
@@ -74,6 +86,7 @@ public sealed class CliCommandBuilderTests
         Assert.Contains("--name custom-name", args);
         Assert.Contains("--label com.example.team=platform", args);
         Assert.Contains("--label wslcc.project=proj", args);
+        Assert.Contains("--annotation org.opencontainers.image.source=https://github.com/acme/api", args);
         Assert.Contains("--env-file", args);
         Assert.Contains("-e NODE_ENV=production", args);
         Assert.Contains("-u 1000:1000", args);

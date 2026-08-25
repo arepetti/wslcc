@@ -114,6 +114,7 @@ public sealed class ComposeFileParser
         service.HealthCheck = ParseHealthCheck(GetValue(map, "healthcheck"));
         service.Networks = ToKeyList(GetValue(map, "networks"));
         service.Labels = ToNonNullKeyValues(GetValue(map, "labels"));
+        service.Annotations = ToNonNullKeyValues(GetValue(map, "annotations"));
 
         return service;
     }
