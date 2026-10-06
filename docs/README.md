@@ -19,7 +19,7 @@ Two Compose pages, two questions. **“What does this YAML mean?”** → [compo
 
 ## Operators / daemon
 
-1. [daemon.md](daemon.md) — run, autostart, config, RPCs, transport  
+1. [daemon.md](daemon.md) — run, autostart, config, **enable remote HTTPS**, RPCs, transport  
 2. [../SECURITY.md](../SECURITY.md) — pipe identity, HTTP exposure  
 3. [troubleshooting.md](troubleshooting.md)  
 
@@ -40,7 +40,7 @@ Two Compose pages, two questions. **“What does this YAML mean?”** → [compo
 | [compose-file.md](compose-file.md) | Compose YAML format reference — every key's syntax and meaning |
 | [compatibility.md](compatibility.md) | Support status for every key, plus Docker Compose differences / migration |
 | [style-guide.md](style-guide.md) | C# readability conventions (braces, null checks, method shape, XML docs) |
-| [daemon.md](daemon.md) | Canonical `wslccd` internals (config, RPCs, autostart) |
+| [daemon.md](daemon.md) | Canonical `wslccd` internals (config, RPCs, autostart, HTTPS) |
 | [providers.md](providers.md) | Provider backends |
 | [troubleshooting.md](troubleshooting.md) | Common failures |
 | [roadmap.md](roadmap.md) | Milestones |

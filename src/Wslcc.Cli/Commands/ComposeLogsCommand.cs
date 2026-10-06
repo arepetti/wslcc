@@ -77,7 +77,7 @@ public sealed class ComposeLogsCommand : AsyncCommand<ComposeLogsCommand.Setting
 
         try
         {
-            using var client = new WslccClient(settings.Host);
+            using var client = DaemonConnection.Create(settings.Host, settings.Token, settings.TlsCa);
             var any = await LogStreaming.RenderAsync(client, request, settings.Timestamps, cts.Token).ConfigureAwait(false);
 
             if (!any)
@@ -88,6 +88,10 @@ public sealed class ComposeLogsCommand : AsyncCommand<ComposeLogsCommand.Setting
         catch (OperationCanceledException) when (cts.IsCancellationRequested)
         {
             return 0;
+        }
+        catch (ArgumentException ex)
+        {
+            return RpcErrors.ReportSettings(ex);
         }
         catch (RpcException ex) when (ex.StatusCode == StatusCode.Cancelled && cts.IsCancellationRequested)
         {

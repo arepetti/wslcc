@@ -19,5 +19,11 @@ internal static class RpcErrors
         return 1;
     }
 
+    public static int ReportSettings(ArgumentException ex)
+    {
+        AnsiConsole.MarkupLine($"[red]{ex.Message.EscapeMarkup()}[/]");
+        return 1;
+    }
+
     public static string ShortId(string id) => id.Length > 12 ? id.Substring(0, 12) : id;
 }

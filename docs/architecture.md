@@ -77,4 +77,4 @@ Compose lifecycle RPCs (`Up`, `Down`, `Ps`, `Start`, `Stop`, `Restart`, `Pull`, 
 
 ## Transport
 
-The daemon hosts gRPC over HTTP/2. Locally it listens on a Windows named pipe via Kestrel's `ListenNamedPipe`; the client connects with a `SocketsHttpHandler.ConnectCallback` backed by `NamedPipeClientStream`. A remote HTTP/2 endpoint can be enabled for cross-machine use (no auth yet). See [daemon.md](daemon.md).
+The daemon hosts gRPC over HTTP/2. Locally it listens on a Windows named pipe via Kestrel's `ListenNamedPipe`; the client connects with a `SocketsHttpHandler.ConnectCallback` backed by `NamedPipeClientStream`. A remote **HTTPS** endpoint can be enabled (TLS + bearer token; plain HTTP is refused). See [daemon.md](daemon.md#enable-remote-https).

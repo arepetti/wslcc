@@ -1,6 +1,7 @@
 using Spectre.Console;
 using Spectre.Console.Cli;
 using Wslcc.Client;
+using Wslcc.Grpc.Contracts;
 
 namespace Wslcc.Cli.Commands;
 
@@ -10,7 +11,20 @@ public sealed class DaemonStatusCommand : AsyncCommand<HostSettings>
     protected override async Task<int> ExecuteAsync(CommandContext context, HostSettings settings, CancellationToken cancellationToken)
     {
         var endpoint = WslccEndpoint.Parse(settings.Host);
-        var ping = await DaemonClientHelper.TryPingAsync(settings.Host, cancellationToken: cancellationToken).ConfigureAwait(false);
+        PingResponse? ping;
+        try
+        {
+            ping = await DaemonClientHelper.TryPingAsync(
+                    settings.Host,
+                    cancellationToken: cancellationToken,
+                    token: settings.Token,
+                    tlsCa: settings.TlsCa)
+                .ConfigureAwait(false);
+        }
+        catch (ArgumentException ex)
+        {
+            return RpcErrors.ReportSettings(ex);
+        }
 
         if (ping is null)
         {

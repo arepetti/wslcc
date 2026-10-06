@@ -26,17 +26,19 @@ builder.Host.UseWindowsService(options => options.ServiceName = WslccdConstants.
 var options = new DaemonOptions();
 builder.Configuration.GetSection(DaemonOptions.SectionName).Bind(options);
 
+HttpListenSetup.Validate(options.Http);
+
 // Configure transports explicitly; do not bind the default localhost:5000 endpoint.
 builder.WebHost.UseSetting(WebHostDefaults.ServerUrlsKey, string.Empty);
 builder.WebHost.ConfigureKestrel(kestrel =>
 {
     kestrel.ListenNamedPipe(options.PipeName, listen => listen.Protocols = HttpProtocols.Http2);
-
-    if (options.Http.Enabled && Uri.TryCreate(options.Http.Url, UriKind.Absolute, out var httpUri))
-        kestrel.ListenAnyIP(httpUri.Port, listen => listen.Protocols = HttpProtocols.Http2);
+    HttpListenSetup.Apply(kestrel, options.Http);
 });
 
-builder.Services.AddGrpc();
+var httpToken = HttpListenSetup.ResolveToken(options.Http) ?? string.Empty;
+builder.Services.AddSingleton(new HttpsBearerInterceptor(httpToken));
+builder.Services.AddGrpc(grpc => grpc.Interceptors.Add<HttpsBearerInterceptor>());
 
 RegisterProviders(builder.Services, options);
 builder.Services.AddSingleton<IComposeEngine>(sp =>

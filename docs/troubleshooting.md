@@ -19,6 +19,16 @@ Daemon not reachable. Start it with wslcc daemon start.
 
 Background: [SECURITY.md](../SECURITY.md).
 
+## Remote HTTPS: unauthenticated / untrusted certificate
+
+```text
+Plain HTTP is not supported.
+HTTPS requires a bearer token
+Missing or invalid bearer token.
+```
+
+Remote access is **HTTPS + token only**. Generate a cert with `wslcc daemon cert`, set `Http.Enabled` and a token on the daemon, then pass `--token`/`WSLCC_TOKEN` and `--tls-ca`/`WSLCC_TLS_CA` (the self-signed `server.pem`) from the client. Full steps: [daemon.md — Enable remote HTTPS](daemon.md#enable-remote-https).
+
 ## `up` seems hung for minutes
 
 `depends_on` conditions `service_healthy` and `service_completed_successfully` wait up to **5 minutes** (hard-coded, not configurable). While waiting, the CLI should show a `waiting...` progress line for the dependent; if a dependency never becomes healthy the wait still runs until that deadline.

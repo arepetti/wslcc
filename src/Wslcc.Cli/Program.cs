@@ -56,6 +56,8 @@ app.Configure(config =>
             .WithDescription("Register a per-user autostart so wslccd starts at logon (no elevation).");
         daemon.AddCommand<DaemonUninstallCommand>("uninstall")
             .WithDescription("Remove the per-user autostart entry.");
+        daemon.AddCommand<DaemonCertCommand>("cert")
+            .WithDescription("Write a self-signed TLS certificate for the optional HTTPS endpoint.");
     });
 });
 

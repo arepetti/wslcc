@@ -1,5 +1,6 @@
 using Spectre.Console;
 using Spectre.Console.Cli;
+using Wslcc.Grpc.Contracts;
 
 namespace Wslcc.Cli.Commands;
 
@@ -13,7 +14,20 @@ public sealed class VersionCommand : AsyncCommand<HostSettings>
     {
         AnsiConsole.MarkupLine($"[bold]wslcc[/] (CLI) {CliVersion.Value.EscapeMarkup()}");
 
-        var response = await DaemonClientHelper.TryGetVersionAsync(settings.Host, cancellationToken: cancellationToken).ConfigureAwait(false);
+        GetVersionResponse? response;
+        try
+        {
+            response = await DaemonClientHelper.TryGetVersionAsync(
+                    settings.Host,
+                    cancellationToken: cancellationToken,
+                    token: settings.Token,
+                    tlsCa: settings.TlsCa)
+                .ConfigureAwait(false);
+        }
+        catch (ArgumentException ex)
+        {
+            return RpcErrors.ReportSettings(ex);
+        }
         if (response is null)
         {
             AnsiConsole.MarkupLine("[yellow]Daemon not reachable.[/] Start it with [bold]wslcc daemon start[/].");

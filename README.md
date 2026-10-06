@@ -1,6 +1,6 @@
 # WSLCC — WSL Containers Compose
 
-`wslcc` brings a `docker compose`-style workflow to Microsoft's [WSL containers](https://learn.microsoft.com/en-us/windows/wsl/wsl-container) feature. It fills the gap of a missing `compose` command in `wslc`, and it can also drive the Docker CLI so you have a single, unified interface across both backends — locally or (with an optional unauthenticated HTTP endpoint) on a remote machine.
+`wslcc` brings a `docker compose`-style workflow to Microsoft's [WSL containers](https://learn.microsoft.com/en-us/windows/wsl/wsl-container) feature. It fills the gap of a missing `compose` command in `wslc`, and it can also drive the Docker CLI so you have a single, unified interface across both backends — locally or (with optional **HTTPS + bearer token**) on a remote machine.
 
 > Status: early public-preview era tooling. WSL containers themselves are in public preview (2026); install with `wsl --update --pre-release`. Expect rough edges and breaking changes. Not production-ready.
 
@@ -22,7 +22,7 @@ Before removing an installed build, unregister autostart if you used it: `wslcc 
 ## Components
 
 - `wslcc` — the command-line tool. Mirrors `docker compose ...` under a `compose` branch (`wslcc compose up`, `wslcc compose ps`, ...), plus `wslcc daemon ...` and `wslcc version`.
-- `wslccd` — a small background daemon exposing a gRPC service (named pipe locally; optional HTTP for remote). Runs as a per-user process, on demand or started automatically at logon.
+- `wslccd` — a small background daemon exposing a gRPC service (named pipe locally; optional **HTTPS** for remote). Runs as a per-user process, on demand or started automatically at logon.
 - A provider-agnostic core library, plus providers for **WSL containers** (`wslc`) and **Docker** (`docker`).
 
 ```mermaid
@@ -51,9 +51,9 @@ If a command says the daemon is not reachable, see [docs/troubleshooting.md](doc
 
 ```powershell
 wslcc --help                                   # help
-wslcc version -H npipe://wslccd                # local named pipe (default)
-wslcc version -H http://remote-host:5211       # remote daemon over HTTP/2 (no auth yet)
-wslcc compose version --wslcc-provider docker  # target a specific provider
+wslcc version -H npipe://wslccd                       # local named pipe (default)
+wslcc version -H https://remote-host:5211 --token … --tls-ca server.pem
+wslcc compose version --wslcc-provider docker         # target a specific provider
 ```
 
 ## Repository layout

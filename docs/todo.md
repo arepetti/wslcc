@@ -15,7 +15,7 @@ Intentionally deferred work. **Milestones and sequencing** live in [roadmap.md](
 
 | Item | Priority | Size | Milestone | Issue | Notes |
 | --- | --- | --- | --- | --- | --- |
-| Authentication and TLS for the remote HTTP/2 endpoint (currently unauthenticated/unencrypted) | **P0** | **L** | **0.2** | | Security; also cited from [SECURITY.md](../SECURITY.md). Until done, leave `Http.Enabled` false. |
+| mTLS / Windows cert store / installing the HTTPS cert into Root | **P2** | **M** | **1.0** | | HTTPS + bearer token shipped; this is extra trust UX |
 
 ## Compose file fidelity
 

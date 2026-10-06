@@ -14,6 +14,7 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Wslcc.Cli.Tests/Wslcc.Cli.Tests.csproj" />
+    <Project Path="tests/Wslccd.Tests/Wslccd.Tests.csproj" />
     <Project Path="tests/Wslcc.Compose.Tests/Wslcc.Compose.Tests.csproj" />
     <Project Path="tests/Wslcc.Core.Tests/Wslcc.Core.Tests.csproj" />
     <Project Path="tests/Wslcc.Providers.DockerCompose.Tests/Wslcc.Providers.DockerCompose.Tests.csproj" />

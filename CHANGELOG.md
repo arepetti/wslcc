@@ -9,7 +9,7 @@ No version has been tagged or published yet; everything below is under developme
 ### Added
 
 - Provider-agnostic engine with providers for WSL containers (`wslc`) and Docker (`docker`).
-- `wslccd` daemon: gRPC over a named pipe (optional HTTP), runs as a per-user process (on demand or auto-started at logon).
+- `wslccd` daemon: gRPC over a named pipe (optional HTTPS with TLS and a bearer token; `wslcc daemon cert` mints a self-signed PEM pair). Runs as a per-user process (on demand or auto-started at logon).
 - `compose` commands mirroring `docker compose`:
   - `up` (attached by default — streams logs and gracefully stops on Ctrl+C — or `-d`/`--detach`; auto-builds `build:` services when their image is missing, with `--build`/`--no-build`/`--pull`), `down`, `ps`.
   - `start`, `stop`, `restart`, `pull`, `build`, `logs` (`--follow`, `--tail`, `--timestamps`, `--since`; a non-follow dump is merged in timestamp order across containers) — all scoped to optional `[SERVICES]`.
@@ -21,13 +21,14 @@ No version has been tagged or published yet; everything below is under developme
 - Client-side compose file resolution: multi-file merge (`-f` repeatable, `COMPOSE_FILE`), `.env` (quotes, escapes, inline comments, multi-line and self-referencing values) and `${VAR}` interpolation (`--env-file`), `include` (local files; own project directory and env), `extends`, `profiles` (`--profile`, `COMPOSE_PROFILES`), and `--project-directory`.
 - Service `annotations:` (map and `KEY=VALUE` list) are passed to the runtime as `--annotation` (OCI annotations; not mixed into the label store).
 - Compose `secrets:` (top-level `file:` / `environment:`, service short and `source`/`target` form) are bind-mounted read-only at `/run/secrets/<name>` (or `target`). Swarm `external` secrets fail the load; `uid`/`gid`/`mode` and `build.secrets` are not applied.
-- Daemon commands: `daemon start`/`stop`/`status`, `daemon install`/`uninstall` (per-user autostart at logon, no elevation), and top-level `version`.
+- Daemon commands: `daemon start`/`stop`/`status`, `daemon install`/`uninstall` (per-user autostart at logon, no elevation), `daemon cert` (self-signed TLS material for HTTPS), and top-level `version`.
 - Options: `--no-color` (and `NO_COLOR`) on every command; `compose` commands use `--wslcc-host`/`--wslcc-provider`, while `version`/`daemon` commands use `-H`/`--host` (plus `--provider` on `daemon start`/`install` to set the daemon's default).
 - Targets `net10.0`.
 - Documentation: [docs/troubleshooting.md](docs/troubleshooting.md), [docs/compatibility.md](docs/compatibility.md), [docs/README.md](docs/README.md), roadmap milestones.
 
 ### Changed
 - Compose lifecycle RPCs (`Up`/`Down`/`Ps`/`Start`/`Stop`/`Restart`/`Pull`/`Build`) are server-streaming: per-service `ServiceProgress` events, then a completed response. The CLI prints live progress instead of a blocking spinner.
+- Optional remote daemon transport is **HTTPS + bearer token** only; enabling HTTP without a certificate and token (or with `http://`) fails at daemon start. The local named pipe is unchanged.
 
 ### Fixed
 - `compose pull` skips build-only services (no `image:`) instead of reporting them as failed.

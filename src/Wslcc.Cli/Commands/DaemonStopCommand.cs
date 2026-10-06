@@ -15,10 +15,14 @@ public sealed class DaemonStopCommand : AsyncCommand<HostSettings>
         {
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             cts.CancelAfter(TimeSpan.FromSeconds(5));
-            using var client = new WslccClient(settings.Host);
+            using var client = DaemonConnection.Create(settings.Host, settings.Token, settings.TlsCa);
             await client.ShutdownAsync(cts.Token).ConfigureAwait(false);
             AnsiConsole.MarkupLine($"[green]Daemon stopping[/] at [bold]{endpoint.Display.EscapeMarkup()}[/].");
             return 0;
+        }
+        catch (ArgumentException ex)
+        {
+            return RpcErrors.ReportSettings(ex);
         }
         catch (Exception ex) when (DaemonClientHelper.IsConnectionError(ex))
         {

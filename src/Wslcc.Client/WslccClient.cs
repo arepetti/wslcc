@@ -16,17 +16,30 @@ public sealed class WslccClient : IDisposable
     private readonly global::Wslcc.Grpc.Contracts.Wslcc.WslccClient _client;
 
     public WslccClient(WslccEndpoint endpoint)
+        : this(endpoint, options: null)
     {
-        ArgumentNullException.ThrowIfNull(endpoint);
-
-        Endpoint = endpoint;
-        _channel = CreateChannel(endpoint);
-        _client = new global::Wslcc.Grpc.Contracts.Wslcc.WslccClient(_channel);
     }
 
     public WslccClient(string? host)
-        : this(WslccEndpoint.Parse(host))
+        : this(WslccEndpoint.Parse(host), options: null)
     {
+    }
+
+    public WslccClient(string? host, WslccClientOptions? options)
+        : this(WslccEndpoint.Parse(host), options)
+    {
+    }
+
+    public WslccClient(WslccEndpoint endpoint, WslccClientOptions? options)
+    {
+        ArgumentNullException.ThrowIfNull(endpoint);
+
+        options ??= new WslccClientOptions();
+        EnsureRemoteCredentials(endpoint, options);
+
+        Endpoint = endpoint;
+        _channel = CreateChannel(endpoint, options);
+        _client = HttpsChannelFactory.CreateClient(_channel, endpoint, options);
     }
 
     public WslccEndpoint Endpoint { get; }
@@ -218,7 +231,26 @@ public sealed class WslccClient : IDisposable
         throw new InvalidOperationException("Lifecycle stream ended without a completed response.");
     }
 
-    private static GrpcChannel CreateChannel(WslccEndpoint endpoint)
+    private static void EnsureRemoteCredentials(WslccEndpoint endpoint, WslccClientOptions options)
+    {
+        if (endpoint.IsNamedPipe)
+            return;
+
+        var uri = endpoint.HttpUri ?? throw new ArgumentException("HTTPS endpoint is missing a URI.");
+        if (string.Equals(uri.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new ArgumentException(
+                "Plain HTTP is not supported. Use https:// with a bearer token, or npipe:// for the local daemon.");
+        }
+
+        if (string.IsNullOrEmpty(options.Token))
+        {
+            throw new ArgumentException(
+                "HTTPS requires a bearer token (--token / --wslcc-token, or the WSLCC_TOKEN environment variable).");
+        }
+    }
+
+    private static GrpcChannel CreateChannel(WslccEndpoint endpoint, WslccClientOptions options)
     {
         if (endpoint.IsNamedPipe)
         {
@@ -234,6 +266,6 @@ public sealed class WslccClient : IDisposable
                 new GrpcChannelOptions { HttpHandler = handler });
         }
 
-        return GrpcChannel.ForAddress(endpoint.HttpUri!);
+        return HttpsChannelFactory.Create(endpoint.HttpUri!, options);
     }
 }

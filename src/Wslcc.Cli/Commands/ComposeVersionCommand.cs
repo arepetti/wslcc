@@ -17,12 +17,20 @@ public sealed class ComposeVersionCommand : AsyncCommand<ComposeVersionCommand.S
         // `compose version` reaches the daemon but takes no compose file, so it declares the wslcc-prefixed
         // connection options itself rather than inheriting the file options from ComposeCommandSettings.
         [CommandOption("--wslcc-host <URI>")]
-        [Description("Daemon endpoint. npipe://<name> (default) for a local pipe, or http(s)://host:port for a remote daemon.")]
+        [Description("Daemon endpoint. npipe://<name> (default) for a local pipe, or https://host:port for a remote daemon.")]
         public string? Host { get; set; }
 
         [CommandOption("--wslcc-provider <NAME>")]
         [Description("Provider to target: 'wslc' or 'docker'. Defaults to the daemon's configured provider.")]
         public string? Provider { get; set; }
+
+        [CommandOption("--wslcc-token <TOKEN>")]
+        [Description("Bearer token for https:// endpoints. Defaults to the WSLCC_TOKEN environment variable.")]
+        public string? Token { get; set; }
+
+        [CommandOption("--wslcc-tls-ca <PATH>")]
+        [Description("PEM file of the extra CA or self-signed server certificate to trust. Defaults to WSLCC_TLS_CA.")]
+        public string? TlsCa { get; set; }
 
         [CommandOption("--short")]
         [Description("Print only the version string.")]
@@ -35,8 +43,21 @@ public sealed class ComposeVersionCommand : AsyncCommand<ComposeVersionCommand.S
 
     protected override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
-        var response = await DaemonClientHelper.TryGetVersionAsync(settings.Host, settings.Provider, cancellationToken: cancellationToken)
-            .ConfigureAwait(false);
+        GetVersionResponse? response;
+        try
+        {
+            response = await DaemonClientHelper.TryGetVersionAsync(
+                    settings.Host,
+                    settings.Provider,
+                    cancellationToken: cancellationToken,
+                    token: settings.Token,
+                    tlsCa: settings.TlsCa)
+                .ConfigureAwait(false);
+        }
+        catch (ArgumentException ex)
+        {
+            return RpcErrors.ReportSettings(ex);
+        }
 
         if (response is null)
         {

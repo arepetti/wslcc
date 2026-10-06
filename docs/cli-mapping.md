@@ -37,10 +37,12 @@ The daemon endpoint and target provider are deliberately **not** global — see 
 Report the CLI version, the daemon's version, and every provider's underlying tool version — analogous to `docker version`.
 
 ```
-wslcc version [-H|--host <uri>]
+wslcc version [-H|--host <uri>] [--token <token>] [--tls-ca <path>]
 ```
 
-**-H, --host** _uri_ :   Daemon endpoint to contact. See [Project name and connection](#project-name-and-connection) for the `npipe://`/`http(s)://` syntax. Default: `npipe://wslccd`.
+**-H, --host** _uri_ :   Daemon endpoint to contact. See [Project name and connection](#project-name-and-connection) for the `npipe://`/`https://` syntax. Default: `npipe://wslccd`.
+
+**--token** / **--tls-ca** :   Required for `https://` (or set `WSLCC_TOKEN` / `WSLCC_TLS_CA`). See [daemon.md — Enable remote HTTPS](daemon.md#enable-remote-https).
 
 Prints a table with one row per component (`wslccd`, `wslc`, `docker`) showing its version and availability. If a provider's underlying tool isn't installed or reachable, its row is marked `unavailable` with a detail line explaining why, rather than failing the whole command. If the daemon itself is unreachable, the command reports that and exits non-zero — start it first with `wslcc daemon start`.
 
@@ -59,9 +61,13 @@ wslcc -v
 
 ## DAEMON COMMANDS
 
-Commands under `wslcc daemon` manage the `wslccd` background process. See [daemon.md](daemon.md) for how the daemon itself works (transport, configuration, autostart mechanics). Every command here **except `uninstall`** shares one connection option (`uninstall` only edits the registry and never contacts a daemon):
+Commands under `wslcc daemon` manage the `wslccd` background process. See [daemon.md](daemon.md) for how the daemon itself works (transport, configuration, autostart mechanics). Every command here **except `uninstall` and `cert`** shares connection options (`uninstall` and `cert` never contact a running daemon):
 
-**-H, --host** _uri_ :   Daemon endpoint. See [Project name and connection](#project-name-and-connection) for the `npipe://`/`http(s)://` syntax. Default: `npipe://wslccd`. Kept as the plain, unprefixed name (unlike the compose commands) because these commands aren't part of the `docker compose` surface `wslcc compose` mirrors, so there's no standard name to avoid colliding with.
+**-H, --host** _uri_ :   Daemon endpoint. `npipe://<name>` (default) or `https://host:port`. See [Project name and connection](#project-name-and-connection). Kept as the plain, unprefixed name (unlike the compose commands) because these commands aren't part of the `docker compose` surface `wslcc compose` mirrors.
+
+**--token** _value_ :   Bearer token for `https://` endpoints. Defaults to `WSLCC_TOKEN`. Not used for named pipes.
+
+**--tls-ca** _path_ :   PEM of the extra CA or self-signed server certificate to trust. Defaults to `WSLCC_TLS_CA`.
 
 ### wslcc daemon start
 
@@ -73,7 +79,7 @@ wslcc daemon start [--provider <name>] [-H|--host <uri>]
 
 **--provider** _name_ :   Provider to make the daemon's **default** (`wslc` or `docker`) — persisted for the life of that daemon process by passing `--Wslcc:DefaultProvider=<name>` on its command line, so every later command that doesn't pass its own provider override uses this one. If the daemon is already running with a different default, `start` warns rather than silently ignoring the mismatch; changing it requires `wslcc daemon stop` followed by `daemon start --provider <name>` again.
 
-Only manages a **local** daemon — reachable over a named pipe. Passing an `http(s)://` `--host` (a remote daemon) is rejected, since there's nothing local to launch. `wslccd` is located via `WSLCCD_PATH`, then next to `wslcc.exe`, then (in a development checkout) the sibling artifacts output — see [daemon.md](daemon.md) and [Environment variables](#environment-variables).
+Only manages a **local** daemon — reachable over a named pipe. Passing an `https://` `--host` (a remote daemon) is rejected, since there's nothing local to launch. `wslccd` is located via `WSLCCD_PATH`, then next to `wslcc.exe`, then (in a development checkout) the sibling artifacts output — see [daemon.md](daemon.md) and [Environment variables](#environment-variables).
 
 ---
 
@@ -127,6 +133,26 @@ Does **not** stop an already-running daemon — use `wslcc daemon stop` for that
 
 ---
 
+### wslcc daemon cert
+
+Write a self-signed TLS certificate and private key for the optional HTTPS endpoint. Does **not** enable HTTP and does **not** create a bearer token. Step-by-step enablement: [daemon.md — Enable remote HTTPS](daemon.md#enable-remote-https).
+
+```
+wslcc daemon cert [--hostname <name>] [--out <dir>] [--days <n>] [--force] [--write-config]
+```
+
+**--hostname** _name_ :   DNS name or IP included in the certificate SAN. Repeatable. Defaults to `localhost` and `127.0.0.1`. Use every name clients will put in `-H`/`--wslcc-host`.
+
+**--out** _dir_ :   Output directory for `server.pem` and `server.key`. Default: `%LOCALAPPDATA%\wslcc\certs`.
+
+**--days** _n_ :   Lifetime in days (default 365).
+
+**--force** :   Overwrite an existing pair in the output directory.
+
+**--write-config** :   Set `CertificatePath` / `CertificateKeyPath` in `appsettings.json` next to `wslccd` when that file is writable. Never sets `Enabled` or a token.
+
+---
+
 ## COMPOSE COMMANDS
 
 `wslcc compose` manages a Compose application: one or more YAML files describing services, plus a project name that scopes their containers. Every command below shares the options in [Compose file and project options](#compose-file-and-project-options) and (except `config`) the connection options in [Project name and connection](#project-name-and-connection).
@@ -155,9 +181,13 @@ Resolution — merging files, loading `.env`, interpolating variables, resolving
 
 **Daemon endpoint.** Every compose command except `config` (which is entirely client-side, see below) talks to `wslccd`, and needs to know where it is:
 
-**--wslcc-host** _uri_ :   `npipe://<name>` (default `npipe://wslccd`) for a local named pipe, or `http(s)://host:port` for a remote daemon over HTTP/2. The form `npipe://<server>/<name>` is parsed for a remote Windows named pipe but is **not a supported/tested transport** today (local pipe ACLs and anonymous impersonation make cross-machine use unlikely to work). Named `--wslcc-host` rather than plain `--host` specifically so it can never collide with a real `docker compose` option, since `wslcc compose` otherwise mirrors that CLI's flag names on purpose.
+**--wslcc-host** _uri_ :   `npipe://<name>` (default `npipe://wslccd`) for a local named pipe, or `https://host:port` for a remote daemon. Plain `http://` is rejected. The form `npipe://<server>/<name>` is parsed for a remote Windows named pipe but is **not a supported/tested transport** today. Named `--wslcc-host` rather than plain `--host` specifically so it can never collide with a real `docker compose` option.
 
 **--wslcc-provider** _name_ :   Target `wslc` or `docker` for this one command, overriding the daemon's configured default. Same `--wslcc-` prefix rationale as above.
+
+**--wslcc-token** _value_ :   Bearer token for `https://`. Defaults to `WSLCC_TOKEN`. Unused on named pipes.
+
+**--wslcc-tls-ca** _path_ :   PEM of the extra CA or self-signed server cert to trust. Defaults to `WSLCC_TLS_CA`. Required for the self-signed cert from `wslcc daemon cert` because it is not in the system store.
 
 You normally don't need `--wslcc-provider` at all: set the daemon's default once with `wslcc daemon start --provider docker` (or `daemon install --provider docker`), and every later command uses it automatically. Reach for `--wslcc-provider` only to override a single invocation. (These are the *only* two places `--provider` is spelled `--wslcc-provider` — on `daemon start`/`daemon install` themselves it stays plain `--provider`, because there it's setting the daemon's own default rather than targeting one `docker compose`-shaped command; see [daemon.md](daemon.md).)
 
@@ -168,7 +198,7 @@ You normally don't need `--wslcc-provider` at all: set the daemon's default once
 Report the version of whichever provider is active — analogous to `docker compose version`.
 
 ```
-wslcc compose version [--short] [--format <fmt>] [--wslcc-host <uri>] [--wslcc-provider <name>]
+wslcc compose version [--short] [--format <fmt>] [--wslcc-host <uri>] [--wslcc-provider <name>] [--wslcc-token <token>] [--wslcc-tls-ca <path>]
 ```
 
 **--short** :   Print only the version string.
@@ -399,6 +429,9 @@ Command-level rules for `depends_on` ordering:
 | `COMPOSE_PATH_SEPARATOR` | compose commands | Separator used to split `COMPOSE_FILE` into multiple paths. Defaults to `;` on Windows. |
 | `COMPOSE_PROFILES` | compose commands | Comma-separated profiles to activate, unioned with `--profile` — see [compose-file.md §4.10.5](compose-file.md#sec-4-10-5). |
 | `WSLCCD_PATH` | `daemon start`, `daemon install` (fallback) | Explicit path to `wslccd(.exe)`, checked before "next to `wslcc.exe`" and the development sibling-artifacts fallback. |
+| `WSLCC_HTTP_TOKEN` | `wslccd` | Bearer token for the HTTPS listener when `Http.Token` / `Http.TokenFile` are empty. |
+| `WSLCC_TOKEN` | CLI (`https://` only) | Client bearer token when `--token` / `--wslcc-token` is omitted. |
+| `WSLCC_TLS_CA` | CLI (`https://` only) | Path to the extra CA / self-signed server PEM when `--tls-ca` / `--wslcc-tls-ca` is omitted. |
 | `WSLCC_DEBUG` | compose commands | Set to `1` to print full exception detail on an RPC failure instead of a friendly summary. |
 
 ---

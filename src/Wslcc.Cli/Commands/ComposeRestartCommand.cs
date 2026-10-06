@@ -42,7 +42,7 @@ public sealed class ComposeRestartCommand : AsyncCommand<ComposeRestartCommand.S
 
         try
         {
-            using var client = new WslccClient(settings.Host);
+            using var client = DaemonConnection.Create(settings.Host, settings.Token, settings.TlsCa);
             AnsiConsole.MarkupLine("[bold]Restarting services…[/]");
             var response = await client.RestartAsync(request, ProgressDisplay.Create(), cancellationToken)
                 .ConfigureAwait(false);
@@ -56,6 +56,10 @@ public sealed class ComposeRestartCommand : AsyncCommand<ComposeRestartCommand.S
             }
 
             return ServiceResults.FailedCount(response.Results) > 0 ? 1 : 0;
+        }
+        catch (ArgumentException ex)
+        {
+            return RpcErrors.ReportSettings(ex);
         }
         catch (RpcException ex)
         {

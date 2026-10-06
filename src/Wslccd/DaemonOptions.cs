@@ -21,7 +21,19 @@ public sealed class DaemonOptions
     {
         public bool Enabled { get; set; }
 
-        public string Url { get; set; } = "http://0.0.0.0:5211";
+        public string Url { get; set; } = "https://0.0.0.0:5211";
+
+        /// <summary>PEM certificate path (required when <see cref="Enabled"/> is true).</summary>
+        public string? CertificatePath { get; set; }
+
+        /// <summary>PEM private-key path (required when <see cref="Enabled"/> is true).</summary>
+        public string? CertificateKeyPath { get; set; }
+
+        /// <summary>Bearer token. Prefer <see cref="TokenFile"/> or <c>WSLCC_HTTP_TOKEN</c> over committing this.</summary>
+        public string? Token { get; set; }
+
+        /// <summary>Path to a file whose entire contents (trimmed) are the bearer token.</summary>
+        public string? TokenFile { get; set; }
     }
 
     public sealed class ProviderOptions

@@ -42,7 +42,7 @@ public sealed class ComposePullCommand : AsyncCommand<ComposePullCommand.Setting
 
         try
         {
-            using var client = new WslccClient(settings.Host);
+            using var client = DaemonConnection.Create(settings.Host, settings.Token, settings.TlsCa);
             AnsiConsole.MarkupLine("[bold]Pulling images…[/]");
             var response = await client.PullAsync(request, ProgressDisplay.Create(), cancellationToken)
                 .ConfigureAwait(false);
@@ -56,6 +56,10 @@ public sealed class ComposePullCommand : AsyncCommand<ComposePullCommand.Setting
             }
 
             return ServiceResults.FailedCount(response.Results) > 0 ? 1 : 0;
+        }
+        catch (ArgumentException ex)
+        {
+            return RpcErrors.ReportSettings(ex);
         }
         catch (RpcException ex)
         {

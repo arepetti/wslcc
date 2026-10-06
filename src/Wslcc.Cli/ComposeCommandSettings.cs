@@ -39,10 +39,18 @@ public class ComposeFileSettings : GlobalSettings
 public class ComposeCommandSettings : ComposeFileSettings
 {
     [CommandOption("--wslcc-host <URI>")]
-    [Description("Daemon endpoint. npipe://<name> (default) for a local pipe, or http(s)://host:port for a remote daemon.")]
+    [Description("Daemon endpoint. npipe://<name> (default) for a local pipe, or https://host:port for a remote daemon.")]
     public string? Host { get; set; }
 
     [CommandOption("--wslcc-provider <NAME>")]
     [Description("Provider to target for this command: 'wslc' or 'docker'. Defaults to the daemon's configured provider.")]
     public string? Provider { get; set; }
+
+    [CommandOption("--wslcc-token <TOKEN>")]
+    [Description("Bearer token for https:// endpoints. Defaults to the WSLCC_TOKEN environment variable.")]
+    public string? Token { get; set; }
+
+    [CommandOption("--wslcc-tls-ca <PATH>")]
+    [Description("PEM file of the extra CA or self-signed server certificate to trust. Defaults to WSLCC_TLS_CA.")]
+    public string? TlsCa { get; set; }
 }

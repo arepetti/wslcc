@@ -68,7 +68,7 @@ public sealed class ComposeUpCommand : AsyncCommand<ComposeUpCommand.Settings>
 
         try
         {
-            using var client = new WslccClient(settings.Host);
+            using var client = DaemonConnection.Create(settings.Host, settings.Token, settings.TlsCa);
             AnsiConsole.MarkupLine("[bold]Starting services…[/]");
             var response = await client.UpAsync(request, ProgressDisplay.Create(), cancellationToken)
                 .ConfigureAwait(false);
@@ -80,6 +80,10 @@ public sealed class ComposeUpCommand : AsyncCommand<ComposeUpCommand.Settings>
                 return failed > 0 ? 1 : 0;
 
             return await AttachAsync(client, settings, inputs, cancellationToken).ConfigureAwait(false);
+        }
+        catch (ArgumentException ex)
+        {
+            return RpcErrors.ReportSettings(ex);
         }
         catch (RpcException ex)
         {

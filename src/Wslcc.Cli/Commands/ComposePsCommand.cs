@@ -36,7 +36,7 @@ public sealed class ComposePsCommand : AsyncCommand<ComposePsCommand.Settings>
 
         try
         {
-            using var client = new WslccClient(settings.Host);
+            using var client = DaemonConnection.Create(settings.Host, settings.Token, settings.TlsCa);
             var response = await client.PsAsync(request, progress: null, cancellationToken).ConfigureAwait(false);
 
             var scoped = !string.IsNullOrEmpty(response.ProjectName);
@@ -84,6 +84,10 @@ public sealed class ComposePsCommand : AsyncCommand<ComposePsCommand.Settings>
 
             AnsiConsole.Write(table);
             return 0;
+        }
+        catch (ArgumentException ex)
+        {
+            return RpcErrors.ReportSettings(ex);
         }
         catch (RpcException ex)
         {

@@ -15,14 +15,16 @@ internal static class DaemonClientHelper
     public static async Task<PingResponse?> TryPingAsync(
         string? host,
         TimeSpan? timeout = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? token = null,
+        string? tlsCa = null)
     {
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         cts.CancelAfter(timeout ?? TimeSpan.FromSeconds(2));
 
         try
         {
-            using var client = new WslccClient(host);
+            using var client = DaemonConnection.Create(host, token, tlsCa);
             return await client.PingAsync(cts.Token).ConfigureAwait(false);
         }
         catch (Exception ex) when (IsUnreachable(ex, cancellationToken))
@@ -40,14 +42,16 @@ internal static class DaemonClientHelper
         string? host,
         string? provider = null,
         TimeSpan? timeout = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? token = null,
+        string? tlsCa = null)
     {
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         cts.CancelAfter(timeout ?? TimeSpan.FromSeconds(30));
 
         try
         {
-            using var client = new WslccClient(host);
+            using var client = DaemonConnection.Create(host, token, tlsCa);
             return await client.GetVersionAsync(provider, cts.Token).ConfigureAwait(false);
         }
         catch (Exception ex) when (IsUnreachable(ex, cancellationToken))

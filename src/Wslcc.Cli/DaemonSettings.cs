@@ -11,8 +11,16 @@ namespace Wslcc.Cli;
 public class HostSettings : GlobalSettings
 {
     [CommandOption("-H|--host <URI>")]
-    [Description("Daemon endpoint. npipe://<name> (default) for a local pipe, or http(s)://host:port for a remote daemon.")]
+    [Description("Daemon endpoint. npipe://<name> (default) for a local pipe, or https://host:port for a remote daemon.")]
     public string? Host { get; set; }
+
+    [CommandOption("--token <TOKEN>")]
+    [Description("Bearer token for https:// endpoints. Defaults to the WSLCC_TOKEN environment variable.")]
+    public string? Token { get; set; }
+
+    [CommandOption("--tls-ca <PATH>")]
+    [Description("PEM file of the extra CA or self-signed server certificate to trust. Defaults to WSLCC_TLS_CA.")]
+    public string? TlsCa { get; set; }
 }
 
 /// <summary>
