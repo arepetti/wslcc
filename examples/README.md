@@ -16,4 +16,14 @@ wslcc compose ps --project-directory examples/web-redis
 wslcc compose down --project-directory examples/web-redis
 ```
 
+## `mongo-ui/`
+
+MongoDB, a one-shot job that writes a sample document, and a web UI on [http://localhost:8081](http://localhost:8081) (`demo` / `demo`). Also covers a named volume, a custom network, a health check, and `depends_on` conditions. See [mongo-ui/README.md](mongo-ui/README.md).
+
+```powershell
+wslcc compose up --project-directory examples/mongo-ui -d
+wslcc compose ps --project-directory examples/mongo-ui
+wslcc compose down --project-directory examples/mongo-ui
+```
+
 See [../docs/compose-file.md](../docs/compose-file.md) for which Compose keys are currently supported, and [../docs/compatibility.md](../docs/compatibility.md) if you are migrating from `docker compose`.

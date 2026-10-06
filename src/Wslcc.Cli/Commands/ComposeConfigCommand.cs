@@ -1,7 +1,7 @@
 using System.ComponentModel;
 using Spectre.Console;
 using Spectre.Console.Cli;
-using Wslcc.Compose;
+using Wslcc.Compose.Configuration;
 
 namespace Wslcc.Cli.Commands;
 

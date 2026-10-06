@@ -11,6 +11,8 @@ public sealed class VolumeSpec
     /// <summary>Compose <c>driver:</c>; <c>null</c> leaves the provider's default.</summary>
     public string? Driver { get; set; }
 
+    public IDictionary<string, string> DriverOptions { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+
     /// <summary>Compose <c>external: true</c> — the volume already exists and must not be created or removed.</summary>
     public bool External { get; set; }
 }

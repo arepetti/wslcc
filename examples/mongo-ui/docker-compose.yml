@@ -1,0 +1,75 @@
+name: mongo-ui
+
+services:
+  mongo:
+    image: mongo:7
+    hostname: mongodb
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: demo
+      MONGO_INITDB_ROOT_PASSWORD: demo
+      MONGO_INITDB_DATABASE: demo
+    volumes:
+      - type: volume
+        source: mongo-data
+        target: /data/db
+    networks:
+      data:
+        aliases:
+          - database
+    healthcheck:
+      test:
+        - CMD
+        - mongosh
+        - --quiet
+        - --username
+        - demo
+        - --password
+        - demo
+        - --authenticationDatabase
+        - admin
+        - --eval
+        - db.adminCommand('ping').ok
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    stop_grace_period: 15s
+
+  seed:
+    image: mongo:7
+    depends_on:
+      mongo:
+        condition: service_healthy
+    networks:
+      - data
+    command:
+      - mongosh
+      - mongodb://demo:demo@database:27017/demo?authSource=admin
+      - --quiet
+      - --eval
+      - 'db.notes.replaceOne({_id:"hello"},{_id:"hello",message:"Hello from the WSLCC example"},{upsert:true})'
+
+  ui:
+    image: mongo-express:1.0
+    ports:
+      - target: 8081
+        published: 8081
+        protocol: tcp
+    environment:
+      ME_CONFIG_MONGODB_URL: mongodb://demo:demo@database:27017/
+      ME_CONFIG_BASICAUTH_USERNAME: demo
+      ME_CONFIG_BASICAUTH_PASSWORD: demo
+    depends_on:
+      mongo:
+        condition: service_healthy
+      seed:
+        condition: service_completed_successfully
+    networks:
+      - data
+
+networks:
+  data:
+    driver: bridge
+
+volumes:
+  mongo-data:

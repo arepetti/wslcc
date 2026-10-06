@@ -6,6 +6,8 @@ This document is the **single source of truth for support status**. If the quest
 
 WSLCC aims to *feel* like `docker compose`, but it is a separate orchestrator. Even with `--wslcc-provider docker`, it does **not** call the Docker Compose plugin for lifecycle — it drives the plain `docker` CLI and applies its own labels and rules.
 
+The `wslc` provider targets WSLc 3.0.1 GA. It uses `Microsoft.WSL.Containers` for session ownership, image pull/lookup, and basic lifecycle, with a session-scoped CLI fallback for capabilities absent from the managed API. Notes call out provider differences; a feature marked partial may be complete on Docker but unavailable on WSLc.
+
 **Suggested first step:** run `wslcc compose config` on your project and read the resolved document (and any warnings). Then skim the tables below against the keys you actually use.
 
 ---
@@ -36,8 +38,8 @@ Two rules that follow from the legend:
 | `version` | ❌ Not read | Obsolete in the Compose Specification; ignored without warning. [Format](compose-file.md#sec-3-2) | |
 | `name` | ✅ Applied | Project name when `-p` / `--project-name` is absent. [Format](compose-file.md#sec-3-3) | 0.1 |
 | `services` | ✅ Applied | Required for any meaningful operation. [Format](compose-file.md#sec-3-4) | 0.1 |
-| `networks` | ⚠️ Partial | Only `driver` and `external` modeled; `name`, `ipam`, `internal`, `attachable`, `labels`, `driver_opts` ignored. [Format](compose-file.md#sec-5) | 0.1 |
-| `volumes` | ⚠️ Partial | Only `driver` and `external` modeled; `name`, `labels`, `driver_opts` ignored. [Format](compose-file.md#sec-6) | 0.1 |
+| `networks` | ⚠️ Partial | `driver`, `external`, `internal`, `driver_opts`, and the first IPAM config's `subnet` / `gateway` / `ip_range` are applied. `name`, `attachable`, labels, and IPv6 toggles are ignored. Network lifecycle is CLI-backed on WSLc. [Format](compose-file.md#sec-5) | 0.1 |
+| `volumes` | ⚠️ Partial | `driver`, `external`, and `driver_opts` are applied. `name` and labels are ignored. Generic volume lifecycle is CLI-backed on WSLc. [Format](compose-file.md#sec-6) | 0.1 |
 | `configs` | ❌ Not read | Neither the top-level objects nor the service attachments are created. [Format](compose-file.md#sec-7) | |
 | `secrets` | ⚠️ Partial | `file:` and `environment:` are bind-mounted read-only (default `/run/secrets/<name>`); `external: true` is 🛑 rejected (no Swarm secret store). `name:`, `labels`, and uid/gid/mode are not applied. [Format](compose-file.md#sec-8) | 0.1 |
 | `include` | 🧩 Client-only | Local paths only (short form and long `path` / `project_directory` / `env_file`). Nested includes allowed; name collisions with the including file fail the load; Git/OCI/HTTP URLs are 🛑 rejected. [Format](compose-file.md#sec-3-9) | 0.1 |
@@ -51,10 +53,10 @@ Every service attribute, alphabetically. “Format” links to the syntax and ne
 
 | Key | Status | Note | Format | Introduced in |
 | --- | --- | --- | --- | --- |
-| `annotations` | ✅ Applied | Map and list forms, passed as `--annotation`. Docker Engine 25+; preview `wslc` may reject the flag ([providers.md](providers.md)). Distinct from `labels` — WSLCC does not inject `wslcc.*` keys here. | [4.10.4](compose-file.md#sec-4-10-4) | 0.1 |
+| `annotations` | ⚠️ Partial | Docker provider only (`--annotation`, Engine 25+). WSLc 3.0.1 exposes annotations through neither the managed API nor CLI and rejects the request. | [4.10.4](compose-file.md#sec-4-10-4) | 0.1 |
 | `attach` | ❌ Not read | Output streaming is not configurable per service. | [4.3.10](compose-file.md#sec-4-3-10) | |
 | `blkio_config` | ❌ Not read | No block-IO weights or per-device limits. | [4.12.17](compose-file.md#sec-4-12-17) | |
-| `build` | ⚠️ Partial | String form, or map with `context` / `dockerfile` / `target` / `args`. All other build fields ignored. | [4.2.2](compose-file.md#sec-4-2-2) | 0.1 |
+| `build` | ⚠️ Partial | String form, or map with `context` / `dockerfile` / `target` / `args` / `labels` / `no_cache` / `pull` / `secrets`. WSLc builds are CLI-only; its managed API has no build method. | [4.2.2](compose-file.md#sec-4-2-2) | 0.1 |
 | `cap_add` | ❌ Not read | Capabilities are not granted. | [4.11.2](compose-file.md#sec-4-11-2) | |
 | `cap_drop` | ❌ Not read | **Capabilities are not dropped** — no hardening effect. | [4.11.3](compose-file.md#sec-4-11-3) | |
 | `cgroup` | ❌ Not read | Cgroup namespace mode not applied. | [4.12.23](compose-file.md#sec-4-12-23) | |
@@ -69,7 +71,7 @@ Every service attribute, alphabetically. “Format” links to the syntax and ne
 | `cpu_rt_period` | ❌ Not read | Real-time period not applied. | [4.12.6](compose-file.md#sec-4-12-6) | |
 | `cpu_rt_runtime` | ❌ Not read | Real-time runtime not applied. | [4.12.5](compose-file.md#sec-4-12-5) | |
 | `cpu_shares` | ❌ Not read | Relative CPU weight not applied. | [4.12.2](compose-file.md#sec-4-12-2) | |
-| `cpus` | ❌ Not read | **No CPU limit is enforced.** | [4.12.1](compose-file.md#sec-4-12-1) | |
+| `cpus` | ✅ Applied | Passed as per-container `--cpus` (CLI-backed on WSLc). The SDK's session-wide CPU setting is not used as a substitute. | [4.12.1](compose-file.md#sec-4-12-1) | 0.1 |
 | `cpuset` | ❌ Not read | No core pinning. | [4.12.9](compose-file.md#sec-4-12-9) | |
 | `credential_spec` | ❌ Not read | Windows gMSA credentials not applied. | [4.11.7](compose-file.md#sec-4-11-7) | |
 | `depends_on` | ✅ Applied | Short and long forms; `condition` and `required` honored. `restart: true` is not read. Waits cap at 5 minutes. | [4.8.1](compose-file.md#sec-4-8-1) | 0.1 |
@@ -77,10 +79,10 @@ Every service attribute, alphabetically. “Format” links to the syntax and ne
 | `develop` | ❌ Not read | No file watching or hot reload. | [4.16.2](compose-file.md#sec-4-16-2) | |
 | `device_cgroup_rules` | ❌ Not read | Device cgroup rules not applied. | [4.12.19](compose-file.md#sec-4-12-19) | |
 | `devices` | ❌ Not read | Host devices are not exposed to the container. | [4.12.18](compose-file.md#sec-4-12-18) | |
-| `dns` | ❌ Not read | Custom resolvers not applied. | [4.6.4](compose-file.md#sec-4-6-4) | |
-| `dns_opt` | ❌ Not read | Resolver options not applied. | [4.6.5](compose-file.md#sec-4-6-5) | |
-| `dns_search` | ❌ Not read | Search domains not applied. | [4.6.6](compose-file.md#sec-4-6-6) | |
-| `domainname` | ❌ Not read | Container domain name not applied. | [4.3.6](compose-file.md#sec-4-3-6) | |
+| `dns` | ✅ Applied | Resolver entries are repeated as `--dns`; CLI-backed on WSLc. | [4.6.4](compose-file.md#sec-4-6-4) | 0.1 |
+| `dns_opt` | ✅ Applied | Resolver options are repeated as `--dns-option`; CLI-backed on WSLc. | [4.6.5](compose-file.md#sec-4-6-5) | 0.1 |
+| `dns_search` | ✅ Applied | Search domains are repeated as `--dns-search`; CLI-backed on WSLc. | [4.6.6](compose-file.md#sec-4-6-6) | 0.1 |
+| `domainname` | ✅ Applied | Passed as `--domainname`; also represented by the managed API. | [4.3.6](compose-file.md#sec-4-3-6) | 0.1 |
 | `entrypoint` | ✅ Applied | Same exec/shell rules as `command`; passed as `--entrypoint`. | [4.3.2](compose-file.md#sec-4-3-2) | 0.1 |
 | `env_file` | ✅ Applied | Passed as `--env-file`; `{path, required}` long form honored. `format: raw` is not. | [4.4.2](compose-file.md#sec-4-4-2) | 0.1 |
 | `environment` | ✅ Applied | Map and list forms; overrides `env_file`. Bare keys inherit from **`wslccd`'s** environment. | [4.4.1](compose-file.md#sec-4-4-1) | 0.1 |
@@ -88,59 +90,59 @@ Every service attribute, alphabetically. “Format” links to the syntax and ne
 | `extends` | 🧩 Client-only | Resolved before the daemon; chains allowed, cycles rejected. | [4.10.6](compose-file.md#sec-4-10-6) | 0.1 |
 | `external_links` | ❌ Not read | External aliases not created. | [4.6.8](compose-file.md#sec-4-6-8) | |
 | `extra_hosts` | ❌ Not read | No `/etc/hosts` entries added. | [4.6.3](compose-file.md#sec-4-6-3) | |
-| `gpus` | ❌ Not read | No GPU devices requested. | [4.12.20](compose-file.md#sec-4-12-20) | |
+| `gpus` | ✅ Applied | Scalar/list value passed as `--gpus`; WSLc also exposes GPU enablement in its managed API. | [4.12.20](compose-file.md#sec-4-12-20) | 0.1 |
 | `group_add` | ❌ Not read | Supplementary groups not added. | [4.11.8](compose-file.md#sec-4-11-8) | |
-| `healthcheck` | ✅ Applied | `test`, `interval`, `timeout`, `retries`, `start_period`, `disable`. `start_interval` is not read; `test` is flattened to a shell command. | [4.8.2](compose-file.md#sec-4-8-2) | 0.1 |
+| `healthcheck` | ✅ Applied | `test`, `interval`, `timeout`, `retries`, `start_period`, `disable`. WSLc configuration/state discovery is CLI-backed because the SDK has no healthcheck API. `start_interval` is not read. | [4.8.2](compose-file.md#sec-4-8-2) | 0.1 |
 | `hostname` | ✅ Applied | Passed as `--hostname`. | [4.3.5](compose-file.md#sec-4-3-5) | 0.1 |
 | `image` | ✅ Applied | Optional when `build:` is present. | [4.2.1](compose-file.md#sec-4-2-1) | 0.1 |
 | `init` | ❌ Not read | No init shim; PID 1 stays your process. | [4.3.11](compose-file.md#sec-4-3-11) | |
 | `ipc` | ❌ Not read | IPC namespace mode not applied. | [4.14.1](compose-file.md#sec-4-14-1) | |
 | `isolation` | ❌ Not read | Windows isolation mode not applied. | [4.14.4](compose-file.md#sec-4-14-4) | |
 | `label_file` | ❌ Not read | Label files are not loaded. | [4.10.3](compose-file.md#sec-4-10-3) | |
-| `labels` | ✅ Applied | Map and list forms. WSLCC's `wslcc.*` labels win on a key clash. | [4.10.2](compose-file.md#sec-4-10-2) | 0.1 |
+| `labels` | ✅ Applied | Map and list forms. WSLCC's `wslcc.*` labels win. WSLc container creation/discovery stays CLI-backed because the SDK cannot set labels. | [4.10.2](compose-file.md#sec-4-10-2) | 0.1 |
 | `links` | ❌ Not read | Legacy links ignored; also no implied startup ordering. | [4.6.7](compose-file.md#sec-4-6-7) | |
 | `logging` | ❌ Not read | Driver and options ignored; the runtime default applies. | [4.13.1](compose-file.md#sec-4-13-1) | |
 | `mac_address` | ❌ Not read | MAC address not assigned. | [4.3.7](compose-file.md#sec-4-3-7) | |
-| `mem_limit` | ❌ Not read | **No memory limit is enforced.** | [4.12.10](compose-file.md#sec-4-12-10) | |
+| `mem_limit` | ✅ Applied | Passed as per-container `--memory` (CLI-backed on WSLc). The SDK's session-wide memory setting is not equivalent. | [4.12.10](compose-file.md#sec-4-12-10) | 0.1 |
 | `mem_reservation` | ❌ Not read | Soft reservation not applied. | [4.12.11](compose-file.md#sec-4-12-11) | |
 | `mem_swappiness` | ❌ Not read | Swappiness not applied. | [4.12.13](compose-file.md#sec-4-12-13) | |
 | `memswap_limit` | ❌ Not read | Combined memory + swap limit not applied. | [4.12.12](compose-file.md#sec-4-12-12) | |
 | `models` | ❌ Not read | Compose models integration is absent. | [4.16.5](compose-file.md#sec-4-16-5) | |
-| `network_mode` | ❌ Not read | `host` / `none` / `service:` / `container:` all ignored; the service joins normal networks instead. | [4.6.2](compose-file.md#sec-4-6-2) | |
-| `networks` | ⚠️ Partial | Membership applied (list and map keys). Per-network values — `aliases`, `ipv4_address`, `ipv6_address`, `priority`, `mac_address`, `driver_opts` — ignored. | [4.6.1](compose-file.md#sec-4-6-1) | 0.1 |
+| `network_mode` | ⚠️ Partial | Passed to the runtime instead of provisioning the default network. `none` and `container:` are supported; Docker supports `host`, while WSLc rejects host networking. `service:` is not resolved to a container name. | [4.6.2](compose-file.md#sec-4-6-2) | 0.1 |
+| `networks` | ⚠️ Partial | Membership, repeated `aliases`, and `ipv4_address` are applied on every attachment. `ipv6_address`, priorities, MAC address, per-attachment driver options, and interface name are ignored. Named-network operations are CLI-backed on WSLc. | [4.6.1](compose-file.md#sec-4-6-1) | 0.1 |
 | `oom_kill_disable` | ❌ Not read | OOM killer not disabled. | [4.12.14](compose-file.md#sec-4-12-14) | |
 | `oom_score_adj` | ❌ Not read | OOM score not adjusted. | [4.12.15](compose-file.md#sec-4-12-15) | |
 | `pid` | ❌ Not read | PID namespace mode not applied. | [4.14.2](compose-file.md#sec-4-14-2) | |
 | `pids_limit` | ❌ Not read | Process count not capped. | [4.12.16](compose-file.md#sec-4-12-16) | |
 | `platform` | ❌ Not read | No `--platform` passed; the host architecture is used. | [4.2.4](compose-file.md#sec-4-2-4) | |
-| `ports` | ⚠️ Partial | Short syntax published as `-p`. Long map form is 🛑 **rejected** with an error. | [4.5.1](compose-file.md#sec-4-5-1) | 0.1 |
+| `ports` | ⚠️ Partial | Short syntax and long-form `target` / `published` / `host_ip` / `protocol` are normalized to `-p`. Long-form `name`, `mode`, and `app_protocol` are read only as syntax and have no runtime effect. | [4.5.1](compose-file.md#sec-4-5-1) | 0.1 |
 | `post_start` | ❌ Not read | Lifecycle hooks are not implemented. | [4.9.5](compose-file.md#sec-4-9-5) | |
 | `pre_start` | ❌ Not read | Lifecycle hooks are not implemented. | [4.9.4](compose-file.md#sec-4-9-4) | |
 | `pre_stop` | ❌ Not read | Lifecycle hooks are not implemented. | [4.9.6](compose-file.md#sec-4-9-6) | |
-| `privileged` | ❌ Not read | Containers are **not** privileged; workloads that need it will fail at runtime. | [4.11.1](compose-file.md#sec-4-11-1) | |
+| `privileged` | ❌ Not read | Containers are **not** privileged. The WSLc SDK can create privileged containers, but that path cannot set the labels WSLCC requires; supporting it needs a durable WSLCC metadata redesign or label support in the API. | [4.11.1](compose-file.md#sec-4-11-1) | |
 | `profiles` | 🧩 Client-only | List form only — a scalar is read as “no profiles”. Filtering happens before the daemon. | [4.10.5](compose-file.md#sec-4-10-5) | 0.1 |
 | `provider` | ❌ Not read | External provider plugins are not supported. | [4.16.4](compose-file.md#sec-4-16-4) | |
 | `pull_policy` | ❌ Not read | Pulling is driven by `compose pull` / `up --pull` instead. | [4.2.3](compose-file.md#sec-4-2-3) | |
-| `read_only` | ✅ Applied | Passed as `--read-only` when true. | [4.11.5](compose-file.md#sec-4-11-5) | 0.1 |
-| `restart` | ⚠️ Partial | Passed through as `--restart`. Accepted by the `docker` provider; the preview `wslc` provider may reject the flag ([providers.md](providers.md)). | [4.9.1](compose-file.md#sec-4-9-1) | 0.1 |
+| `read_only` | ⚠️ Partial | Docker provider only (`--read-only`). WSLc 3.0.1 exposes no read-only-rootfs setting and rejects the request. | [4.11.5](compose-file.md#sec-4-11-5) | 0.1 |
+| `restart` | ⚠️ Partial | Docker provider applies `--restart`. WSLc has a restart command but no persistent restart-policy setting, so WSLCC rejects a policy there. | [4.9.1](compose-file.md#sec-4-9-1) | 0.1 |
 | `runtime` | ❌ Not read | Alternative OCI runtimes not selected. | [4.14.5](compose-file.md#sec-4-14-5) | |
 | `scale` | ❌ Not read | One container per service; no replicas. | [4.16.3](compose-file.md#sec-4-16-3) | |
 | `secrets` | ⚠️ Partial | Short form and `source`/`target` become read-only binds; `uid`/`gid`/`mode` ignored. Unknown `source` and Swarm `external` secrets fail the load. | [4.15.2](compose-file.md#sec-4-15-2) | 0.1 |
 | `security_opt` | ❌ Not read | **`no-new-privileges`, seccomp, and AppArmor overrides have no effect.** | [4.11.4](compose-file.md#sec-4-11-4) | |
-| `shm_size` | ❌ Not read | `/dev/shm` keeps the runtime default (usually 64 MB). | [4.12.21](compose-file.md#sec-4-12-21) | |
-| `stdin_open` | ❌ Not read | No `-i`. | [4.3.8](compose-file.md#sec-4-3-8) | |
-| `stop_grace_period` | ❌ Not read | Runtime default stop timeout applies. | [4.9.2](compose-file.md#sec-4-9-2) | |
-| `stop_signal` | ❌ Not read | Always the runtime default (`SIGTERM`). | [4.9.3](compose-file.md#sec-4-9-3) | |
+| `shm_size` | ✅ Applied | Passed as `--shm-size`; CLI-backed on WSLc. | [4.12.21](compose-file.md#sec-4-12-21) | 0.1 |
+| `stdin_open` | ✅ Applied | Passed as `-i`; the managed API also supports process stdin. | [4.3.8](compose-file.md#sec-4-3-8) | 0.1 |
+| `stop_grace_period` | ✅ Applied | Compose duration converted to seconds and passed as `--stop-timeout`; SDK lifecycle calls read the persisted timeout from inspect data. | [4.9.2](compose-file.md#sec-4-9-2) | 0.1 |
+| `stop_signal` | ✅ Applied | Passed as `--stop-signal`; SDK lifecycle calls map the persisted signal from inspect data. | [4.9.3](compose-file.md#sec-4-9-3) | 0.1 |
 | `storage_opt` | ❌ Not read | Storage driver options not passed. | [4.17.1](compose-file.md#sec-4-17-1) | |
 | `sysctls` | ❌ Not read | Kernel parameters not set (they do merge across files, then get dropped). | [4.17.2](compose-file.md#sec-4-17-2) | |
-| `tmpfs` | ✅ Applied | Emitted as `--tmpfs` (path or `path:opts`). | [4.7.3](compose-file.md#sec-4-7-3) | 0.1 |
-| `tty` | ❌ Not read | No `-t`. | [4.3.9](compose-file.md#sec-4-3-9) | |
-| `ulimits` | ❌ Not read | Daemon defaults apply; `nofile` is not raised. | [4.12.22](compose-file.md#sec-4-12-22) | |
+| `tmpfs` | ✅ Applied | Emitted as `--tmpfs` (path or `path:opts`); CLI-only on WSLc because the SDK supports only Windows-path and named-volume mounts. | [4.7.3](compose-file.md#sec-4-7-3) | 0.1 |
+| `tty` | ✅ Applied | Passed as `-t`; CLI-backed on WSLc. | [4.3.9](compose-file.md#sec-4-3-9) | 0.1 |
+| `ulimits` | ✅ Applied | Scalar and soft/hard map values are emitted as repeated `--ulimit`; CLI-backed on WSLc. | [4.12.22](compose-file.md#sec-4-12-22) | 0.1 |
 | `use_api_socket` | ❌ Not read | The engine API socket is not mounted. | [4.17.3](compose-file.md#sec-4-17-3) | |
-| `user` | ✅ Applied | Passed as `-u`; accepts `uid`, `uid:gid`, or names. | [4.3.4](compose-file.md#sec-4-3-4) | 0.1 |
+| `user` | ✅ Applied | Passed as `-u`; accepts `uid`, `uid:gid`, or names. CLI-only on WSLc because managed `ProcessSettings` has no user property. | [4.3.4](compose-file.md#sec-4-3-4) | 0.1 |
 | `userns_mode` | ❌ Not read | User namespace mode not applied. | [4.11.6](compose-file.md#sec-4-11-6) | |
 | `uts` | ❌ Not read | UTS namespace mode not applied. | [4.14.3](compose-file.md#sec-4-14-3) | |
-| `volumes` | ⚠️ Partial | Short syntax and long-form `type: volume` / `bind` / `tmpfs` (including option blocks → `--mount` / `--tmpfs`). `type: npipe` / `cluster` / `image` are 🛑 **rejected**. | [4.7.1](compose-file.md#sec-4-7-1) | 0.1 |
+| `volumes` | ⚠️ Partial | Short syntax and long-form `volume` / `bind` / `tmpfs`. The SDK covers simple bind/named mounts; tmpfs and advanced options are CLI-backed. `npipe` / `cluster` / `image` are 🛑 rejected. | [4.7.1](compose-file.md#sec-4-7-1) | 0.1 |
 | `volumes_from` | ❌ Not read | Mounts are not inherited from other containers. | [4.7.2](compose-file.md#sec-4-7-2) | |
 | `working_dir` | ✅ Applied | Passed as `-w`. | [4.3.3](compose-file.md#sec-4-3-3) | 0.1 |
 
@@ -152,14 +154,14 @@ The ⚠️ rows are the ones that reward a closer look, because they accept your
 
 | Key | Honored | Ignored or refused |
 | --- | --- | --- |
-| `build` | `context`, `dockerfile`, `target`, `args`; string shorthand | `cache_from`/`cache_to`, `secrets`, `ssh`, `platforms`, `tags`, `labels`, `network`, `no_cache`, `pull`, `extra_hosts`, `ulimits`, `isolation`, `privileged`, `additional_contexts`, `dockerfile_inline`, `entitlements` |
-| `ports` | Short syntax, including host IP, ranges, `/udp` | Long map form → hard error (not silently dropped) |
+| `build` | `context`, `dockerfile`, `target`, `args`, `labels`, `no_cache`, `pull`, `secrets`; string shorthand | `cache_from`/`cache_to`, `ssh`, `platforms`, `tags`, `network`, `extra_hosts`, `ulimits`, `isolation`, `privileged`, `additional_contexts`, `dockerfile_inline`, `entitlements` |
+| `ports` | Short syntax; long-form `target`, `published`, `host_ip`, `protocol` | Long-form `name`, `mode`, `app_protocol` have no runtime effect |
 | `volumes` (service) | Short syntax; long-form `volume` / `bind` / `tmpfs` (+ nested option blocks); service `tmpfs:` | `type: npipe` / `cluster` / `image` → hard error; `consistency` ignored |
-| `networks` (service) | Which networks the service joins | `aliases`, `ipv4_address`, `ipv6_address`, `link_local_ips`, `mac_address`, `priority`, `gw_priority`, `driver_opts`, `interface_name` |
-| `networks` (top level) | `driver`, `external` | `name`, `ipam` (subnets, gateways), `internal`, `attachable`, `labels`, `driver_opts`, `enable_ipv4`/`enable_ipv6` |
-| `volumes` (top level) | `driver`, `external` | `name`, `labels`, `driver_opts` |
+| `networks` (service) | Membership, `aliases`, `ipv4_address` | `ipv6_address`, `link_local_ips`, `mac_address`, `priority`, `gw_priority`, `driver_opts`, `interface_name` |
+| `networks` (top level) | `driver`, `external`, `internal`, `driver_opts`; first IPAM config's subnet/gateway/IP range | `name`, additional IPAM configs, `attachable`, `labels`, `enable_ipv4`/`enable_ipv6` |
+| `volumes` (top level) | `driver`, `external`, `driver_opts` | `name`, `labels` |
 | `secrets` (top level + service) | `file:` / `environment:` sources; short and long-form attachments (`source` / `target`); bind-mounted read-only at `/run/secrets/<name>` or `target` | `external: true` (and `external: { name: … }`) → hard error; `name:`, `labels`, `uid`/`gid`/`mode`; `build.secrets` still unread |
-| `restart` | The value, passed to the provider as `--restart` | Nothing in the value itself; the `wslc` preview provider may refuse the flag |
+| `restart` | Docker provider passes the value as `--restart` | WSLc 3.0.1 has no restart-policy API/flag and rejects it |
 | `depends_on` | `condition`, `required`, short list form | `restart: true`; unknown `condition` values silently become `service_started` |
 | `healthcheck` | `test`, `interval`, `timeout`, `retries`, `start_period`, `disable` | `start_interval`; `CMD` vs `CMD-SHELL` distinction (both flatten to a shell command) |
 
@@ -172,7 +174,7 @@ The ⚠️ rows are the ones that reward a closer look, because they accept your
 | Project labels | `com.docker.compose.project` / `.service` | `wslcc.project` / `wslcc.service` / `wslcc.config-hash` |
 | Visibility | `docker compose ps` sees Compose projects | `wslcc compose ps` sees only WSLCC-managed containers |
 | Cross-tool teardown | `docker compose down` manages its own stack | Does **not** remove WSLCC containers; WSLCC `down` does not remove Compose stacks |
-| Backend | Docker Compose plugin | `wslc` or plain `docker` CLI + WSLCC engine ([providers.md](providers.md)) |
+| Backend | Docker Compose plugin | Hybrid WSLc SDK/session-scoped CLI, or plain `docker` CLI + WSLCC engine ([providers.md](providers.md)) |
 
 **Implication:** you cannot incrementally “hand off” a running Compose stack to WSLCC (or the reverse) and expect `ps`/`down` to agree. Treat a move as a recreate under WSLCC, or keep the tools on separate projects.
 
@@ -225,18 +227,18 @@ These are the ones that bite when you reuse an existing file: WSLCC may accept t
 | `env_file` vs CLI `--env-file` / `.env` | Both feed container env / project env per Compose rules | Service `env_file:` → container `--env-file`. CLI `--env-file` / `.env` only affect *interpolation* |
 | `container_name` | Fixed name; blocks scale | Honored; duplicate names across services fail `up` |
 | `labels` (service) | Container labels (+ Compose's own) | Honored; WSLCC's `wslcc.*` labels win on key clash |
-| `ports` long map form | Supported | **Rejected** with an error (short syntax only) |
+| `ports` long map form | Supported | `target`, `published`, `host_ip`, and `protocol` applied; metadata fields ignored |
 | `volumes` long map form | Supported | `volume` / `bind` / `tmpfs` applied; `npipe` / `cluster` / `image` **rejected** |
-| `networks:` map values (`aliases`, `ipv4_address`, …) | Applied | Only membership (keys) applied; map values ignored |
-| Top-level `networks` / `volumes` | `driver`, `external`, `name`, IPAM, `driver_opts`, … | Only `driver` and `external` modeled; no resource `name:` override, no IPAM |
+| `networks:` map values (`aliases`, `ipv4_address`, …) | Applied | Aliases and static IPv4 applied; other per-attachment options ignored |
+| Top-level `networks` / `volumes` | `driver`, `external`, `name`, IPAM, `driver_opts`, … | Driver options and network internal/first-IPAM config applied; no resource `name:` override |
 
 ### Not read at all (silently dropped)
 
-Every key marked ❌ in the [service key matrix](#service-keys) above. In practice the ones that hurt are `configs`, `deploy`, `privileged`, `cap_add`, `cap_drop`, `security_opt`, `devices`, `ulimits`, `extra_hosts`, `dns`, `domainname`, `shm_size`, `pids_limit`, `mem_limit`, `cpus`, `init`, `stdin_open`, `tty`, `network_mode`, `pid`, `ipc`, `uts`, `stop_grace_period`, `stop_signal`, `expose`, `volumes_from`, `links`, `logging`, and `scale` / `deploy.replicas`.
+Every key marked ❌ in the [service key matrix](#service-keys) above. In practice the ones that hurt are `configs`, `deploy`, `privileged`, `cap_add`, `cap_drop`, `security_opt`, `devices`, `extra_hosts`, `pids_limit`, `init`, `pid`, `ipc`, `uts`, `expose`, `volumes_from`, `links`, `logging`, and `scale` / `deploy.replicas`.
 
 **Security note:** `user:` and `read_only:` are applied. Other hardening keys are not — `privileged:`, `cap_drop:`, `security_opt:`, `userns_mode:` all have **no effect**. Do not assume YAML you trusted under Compose still enforces those unread constraints under WSLCC.
 
-**Resource note:** none of the CPU, memory, PID, or IO limits are enforced. A container that Compose would have capped at 512 MB can consume everything the host has.
+**Resource note:** `cpus`, `mem_limit`, `shm_size`, and `ulimits` are applied. Granular CPU scheduling, reservation/swap, PID, OOM, and block-IO controls remain unenforced.
 
 ---
 
@@ -262,7 +264,7 @@ These matter if you rely on multi-file overrides or `extends` the way Compose do
 
 | Topic | Compose | WSLCC today |
 | --- | --- | --- |
-| Sequence merge for long-form ports/volumes | Unique-key merge by target | Ports long form rejected; volumes long form accepted for volume/bind/tmpfs (lists append); short-form lists append + exact-dedup |
+| Sequence merge for long-form ports/volumes | Unique-key merge by target | Long forms are accepted, but lists append with exact-dedup rather than replacing entries by target |
 | `build: .` merged with `build: { dockerfile: … }` | Becomes `{ context: ., dockerfile: … }` | Override can **drop** the string-side context (map wins wholesale when types differ) |
 | Long-form `depends_on` field merge | Per-dependency fields merge | Overriding one field (e.g. `required`) can **replace** the whole dependency object and lose `condition` |
 | `extends` non-inheritable keys | e.g. `container_name` not inherited | Several keys may still merge from the base (stricter Compose non-inherit rules not fully matched) |
@@ -280,8 +282,8 @@ Merge rules as implemented: [compose-file.md §2.2](compose-file.md#sec-2-2). Tr
    wslcc compose config
    wslcc compose config --hash "*"
    ```
-4. Search your compose files for: long-form `ports`, unsupported volume types (`npipe` / `cluster` / `image`), `configs`/`deploy`, `privileged` / `cap_*` / `security_opt`, resource limits (`mem_limit`, `cpus`, `ulimits`), `secrets.external`, and bare `environment` keys you expect from your shell (those inherit from `wslccd`, not your client shell).
-5. Cross-check each hit against the [service key matrix](#service-keys): long-form `ports` and unsupported volume types fail loudly; unread keys fail silently.
+4. Search your compose files for: unsupported volume types (`npipe` / `cluster` / `image`), `configs`/`deploy`, `privileged` / `cap_*` / `security_opt`, extended resource controls, `secrets.external`, and bare `environment` keys you expect from your shell (those inherit from `wslccd`, not your client shell).
+5. Cross-check each hit against the [service key matrix](#service-keys): unsupported volume types and provider-specific rejected options fail loudly; unread keys fail silently.
 6. Pass `-f` for overrides explicitly; use `--project-directory` if you invoke from another cwd (also affects `env_file:` / bind / build path resolution).
 7. Bring the stack up under WSLCC (`up -d`), verify with `wslcc compose ps` — not `docker compose ps`.
 8. Tear down with `wslcc compose down` (add `-v` only if you intend to delete named volumes).

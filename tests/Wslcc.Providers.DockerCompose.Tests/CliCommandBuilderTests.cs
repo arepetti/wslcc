@@ -36,6 +36,44 @@ public sealed class CliCommandBuilderTests
     }
 
     [Fact]
+    public void BuildRunArguments_includes_GA_resource_DNS_terminal_and_stop_options()
+    {
+        var spec = new ContainerRunSpec
+        {
+            Image = "busybox",
+            DomainName = "dev.local",
+            Gpus = "all",
+            Cpus = "1.5",
+            MemoryLimit = "512m",
+            ShmSize = "128m",
+            StdinOpen = true,
+            Tty = true,
+            StopSignal = "SIGINT",
+            StopGracePeriod = "1m30s",
+        };
+        spec.Dns.Add("1.1.1.1");
+        spec.DnsOptions.Add("use-vc");
+        spec.DnsSearch.Add("dev.local");
+        spec.Ulimits["nofile"] = "1024:2048";
+
+        var args = CliCommandBuilder.BuildRunArguments(spec);
+
+        Assert.Contains("--domainname dev.local", args);
+        Assert.Contains("--gpus all", args);
+        Assert.Contains("--cpus 1.5", args);
+        Assert.Contains("--memory 512m", args);
+        Assert.Contains("--dns 1.1.1.1", args);
+        Assert.Contains("--dns-option use-vc", args);
+        Assert.Contains("--dns-search dev.local", args);
+        Assert.Contains("--shm-size 128m", args);
+        Assert.Contains("--ulimit nofile=1024:2048", args);
+        Assert.Contains("--stop-signal SIGINT", args);
+        Assert.Contains("--stop-timeout 90", args);
+        Assert.Contains("-i", args);
+        Assert.Contains("-t", args);
+    }
+
+    [Fact]
     public void BuildRunArguments_quotes_annotation_values_with_spaces()
     {
         var spec = new ContainerRunSpec { Image = "busybox", Name = "proj-svc" };
@@ -218,7 +256,11 @@ public sealed class CliCommandBuilderTests
     [Fact]
     public void BuildNetworkConnectArguments_includes_alias()
     {
-        var args = CliCommandBuilder.BuildNetworkConnectArguments("proj_backend", "proj-web", "web");
+        var args = CliCommandBuilder.BuildNetworkConnectArguments(
+            "proj_backend",
+            "proj-web",
+            new[] { "web" },
+            ipv4Address: null);
 
         Assert.Equal("network connect --alias web proj_backend proj-web", args);
     }
@@ -289,8 +331,18 @@ public sealed class CliCommandBuilderTests
     [Fact]
     public void BuildBuildArguments_includes_tag_dockerfile_target_and_args_with_context_last()
     {
-        var spec = new ImageBuildSpec { Context = "./web", Dockerfile = "Dockerfile.dev", Target = "prod", Tag = "proj-web" };
+        var spec = new ImageBuildSpec
+        {
+            Context = "./web",
+            Dockerfile = "Dockerfile.dev",
+            Target = "prod",
+            Tag = "proj-web",
+            NoCache = true,
+            Pull = true,
+        };
         spec.Args["VERSION"] = "1.2.3";
+        spec.Labels["org.example.build"] = "test";
+        spec.Secrets.Add("id=certificate,src=certificate");
 
         var args = CliCommandBuilder.BuildBuildArguments(spec);
 
@@ -299,6 +351,10 @@ public sealed class CliCommandBuilderTests
         Assert.Contains("-f Dockerfile.dev", args);
         Assert.Contains("--target prod", args);
         Assert.Contains("--build-arg VERSION=1.2.3", args);
+        Assert.Contains("--label org.example.build=test", args);
+        Assert.Contains("--no-cache", args);
+        Assert.Contains("--pull", args);
+        Assert.Contains("--secret id=certificate,src=certificate", args);
         Assert.EndsWith("./web", args);
     }
 

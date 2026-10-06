@@ -137,7 +137,7 @@ When code intentionally follows (or deliberately diverges from) Compose file sem
 
 ```csharp
 // Compose file — command: string is shell form (/bin/sh -c), list is exec.
-// Compose file — ports: long map form is rejected; short syntax only.
+// Compose file — ports: normalize supported long-form fields to CLI publish syntax.
 ```
 
 Format reference: [compose-file.md](compose-file.md). Support status lives only in [compatibility.md](compatibility.md).
@@ -153,8 +153,8 @@ Comments explain **intent / trade-offs / quirks**, not what the next line obviou
 | Namespaces | File-scoped (`namespace Foo;`) |
 | Indent | 4 spaces |
 | Nullable | Enabled project-wide |
-| Targets | `net10.0` only |
+| Targets | `net10.0`; Windows SDK consumers use `net10.0-windows10.0.26100.0` |
 | Packages | Central Package Management ([Directory.Packages.props](../Directory.Packages.props)) |
-| WSL SDK | Behind `WSLC_SDK`; do not sprinkle `#if` elsewhere |
+| WSL SDK | `Microsoft.WSL.Containers` behind `IWslcClient`; CLI gaps stay in the WSLc provider |
 
 `.editorconfig` suggestions are not CI-enforced today; reviews still expect this guide.

@@ -13,6 +13,16 @@ public sealed class NetworkCreateSpec
     /// <summary>Network driver to use; <c>null</c> leaves the provider's default.</summary>
     public string? Driver { get; set; }
 
+    public IDictionary<string, string> DriverOptions { get; } = new Dictionary<string, string>(StringComparer.Ordinal);
+
+    public bool Internal { get; set; }
+
+    public string? Subnet { get; set; }
+
+    public string? Gateway { get; set; }
+
+    public string? IpRange { get; set; }
+
     /// <summary>
     /// Labels applied at creation time, including the <see cref="WslccLabels.Project"/> key that lets
     /// <c>down</c> find the networks wslcc created for the project.

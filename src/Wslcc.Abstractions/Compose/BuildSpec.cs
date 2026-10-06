@@ -20,4 +20,12 @@ public sealed class BuildSpec
     /// environment.
     /// </summary>
     public IDictionary<string, string?> Args { get; set; } = new Dictionary<string, string?>(StringComparer.Ordinal);
+
+    public IDictionary<string, string> Labels { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+
+    public bool NoCache { get; set; }
+
+    public bool Pull { get; set; }
+
+    public IList<string> Secrets { get; set; } = new List<string>();
 }

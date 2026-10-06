@@ -2,7 +2,7 @@
 
 ## Status and threat model
 
-WSLCC is early, preview-era software built on top of the WSL containers public preview. Be aware:
+WSL containers are generally available as of WSL 3.0.1, but WSLCC remains pre-1.0 software. Be aware:
 
 - **No authentication on the named pipe beyond the OS ACL.** The `wslccd` named-pipe transport does not check a bearer token. Any process that can connect to the pipe can invoke every RPC (`Up`, `Down`, `Shutdown`, log streaming, …). That is limited to the **same Windows user and elevation** (see below). The optional remote HTTP endpoint requires **TLS and a bearer token**; it will not start without them ([docs/daemon.md — Enable remote HTTPS](docs/daemon.md#enable-remote-https)).
 - **Local named pipe (default).** Kestrel's named-pipe transport defaults to `CurrentUserOnly = true`: only clients running as the **same Windows user account and the same elevation level** as the daemon can connect. Practical consequences:

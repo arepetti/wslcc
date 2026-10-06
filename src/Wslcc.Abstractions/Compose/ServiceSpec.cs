@@ -63,7 +63,7 @@ public sealed class ServiceSpec
     /// <summary>Files whose variables are loaded into the container (before <see cref="Environment"/> overrides).</summary>
     public IList<EnvFileSpec> EnvFile { get; set; } = new List<EnvFileSpec>();
 
-    /// <summary>Compose <c>ports:</c> in short syntax (e.g. <c>"8080:80"</c>); the long map form is not supported.</summary>
+    /// <summary>Compose <c>ports:</c>, normalized to CLI short syntax.</summary>
     public IList<string> Ports { get; set; } = new List<string>();
 
     /// <summary>
@@ -81,6 +81,10 @@ public sealed class ServiceSpec
 
     /// <summary>Names of the <c>networks:</c> the service joins; empty means the project's default network.</summary>
     public IList<string> Networks { get; set; } = new List<string>();
+
+    /// <summary>Long-form options keyed by network name; absent keys use default attachment behavior.</summary>
+    public IDictionary<string, ServiceNetworkAttachment> NetworkAttachments { get; set; }
+        = new Dictionary<string, ServiceNetworkAttachment>(StringComparer.Ordinal);
 
     /// <summary>Compose <c>labels:</c> applied to the container, alongside the wslcc labels the engine adds.</summary>
     public IDictionary<string, string> Labels { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -102,6 +106,34 @@ public sealed class ServiceSpec
 
     /// <summary>Compose <c>hostname:</c> — the container's hostname (UTS name).</summary>
     public string? Hostname { get; set; }
+
+    public string? DomainName { get; set; }
+
+    public string? Gpus { get; set; }
+
+    public string? Cpus { get; set; }
+
+    public string? MemoryLimit { get; set; }
+
+    public IList<string> Dns { get; set; } = new List<string>();
+
+    public IList<string> DnsOptions { get; set; } = new List<string>();
+
+    public IList<string> DnsSearch { get; set; } = new List<string>();
+
+    public string? ShmSize { get; set; }
+
+    public bool StdinOpen { get; set; }
+
+    public bool Tty { get; set; }
+
+    public IDictionary<string, string> Ulimits { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+
+    public string? StopSignal { get; set; }
+
+    public string? StopGracePeriod { get; set; }
+
+    public string? NetworkMode { get; set; }
 
     /// <summary>Compose <c>read_only:</c> — mount the container root filesystem read-only.</summary>
     public bool ReadOnly { get; set; }

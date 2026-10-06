@@ -2,7 +2,7 @@ using System.Reflection;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Wslcc.Abstractions;
-using Wslcc.Core;
+using Wslcc.Compose.Engine;
 using Wslcc.Grpc.Server;
 using Wslcc.Providers.DockerCompose;
 using Wslcc.Providers.Wslc;

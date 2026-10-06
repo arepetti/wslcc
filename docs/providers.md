@@ -6,17 +6,20 @@ Select a provider per compose command with `--wslcc-provider <name>`; otherwise 
 
 ## `wslc` — WSL containers
 
-`Wslcc.Providers.Wslc` targets Microsoft's WSL containers feature. It is designed around a thin seam, `IWslcClient`, with two implementations:
+`Wslcc.Providers.Wslc` targets WSLc 3.0.1 GA and references `Microsoft.WSL.Containers` 3.0.1. It is intentionally hybrid because the managed API and CLI expose different capabilities:
 
-- `WslcSdkClient` — uses the managed `Microsoft.WSL.Containers` SDK. **Gated** behind the `WSLC_SDK`
-  compile constant, because the package is a preview and may not restore everywhere.
-- `WslcCliClient` — shells out to `wslc.exe`. Used as the fallback today.
+- `WslcSdkClient` owns a long-lived `wslcc` session under `%LOCALAPPDATA%\wslcc\containers`. It handles prerequisites/version, image lookup and pull, and basic container inspect/start/stop/delete operations.
+- `WslcCliClient` is a dedicated GA CLI dialect used only for capabilities missing from the SDK: builds, label-backed creation/discovery, retained logs, healthchecks, custom networks, generic volumes, and resource enumeration.
 
-`WslcProvider.CreateDefaultClient()` chooses the SDK client when compiled with `WSLC_SDK`, otherwise the CLI client. As the SDK reaches API parity, flip the constant on and remove the CLI fallback. This keeps the "easy to fix later" requirement localized to one file.
+Every fallback command includes `wslc --session wslcc`, so SDK and CLI operations see the same images and containers. Do not use Docker Go-template formats for WSLc: WSLc listings use JSON, and options such as network aliases have WSLc-specific spellings.
 
-If `wslc` is not installed, the provider reports `IsAvailable = false` with guidance (`wsl --update --pre-release`) rather than throwing.
+Container creation remains CLI-backed because WSLCC's project/service/config-hash labels are required for change detection and teardown, while the managed API cannot set container labels. The managed API also has no image-build API; even the NuGet package's MSBuild integration invokes `wslc image build`.
 
-The CLI client passes the same `run` flags as Docker for the fields WSLCC applies (`-u`, `-w`, `--entrypoint`, `--label`, `--annotation`, `--env-file`, `--name`, …). Preview `wslc` builds may still reject some Docker-only flags (notably `--restart`, and `--annotation` on older previews); prefer the `docker` provider when you need restart policies or OCI annotations.
+WSLc 3.0.1 supports healthchecks, DNS, per-container CPU/memory limits, GPU requests, terminal/stdin options, custom network IPAM, and advanced mounts through its CLI. It has a restart **command** but no restart policy, and it exposes neither OCI annotations nor a read-only-rootfs setting; WSLCC rejects those provider-specific requests. See [compatibility.md](compatibility.md) and [todo.md](todo.md#wslc-301-cli-only-capabilities).
+
+If the API prerequisites are missing, the provider reports `IsAvailable = false` with `wsl --update` guidance rather than throwing.
+
+Authoritative references: [WSL container overview](https://learn.microsoft.com/windows/wsl/wsl-container), [Microsoft.WSL.Containers 3.0.1](https://www.nuget.org/packages/Microsoft.WSL.Containers/3.0.1), and the [3.0.1 API definition](https://github.com/microsoft/WSL/blob/3.0.1/src/windows/WslcSDK/winrt/wslcsdk.idl).
 
 ## `docker` — Docker CLI
 

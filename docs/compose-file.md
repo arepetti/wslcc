@@ -19,7 +19,7 @@ This reference covers the whole Compose application model:
 - fragments, merge keys, and includes ([§9](#sec-9));
 - WSLCC runtime behavior that a compose file author needs to know: resource naming, the implicit default network, change detection, teardown ([§10](#sec-10)).
 
-WSLCC does **not** invoke the Docker Compose plugin. Even with `--wslcc-provider docker`, the lifecycle is driven by WSLCC's own engine on top of the plain `docker` or `wslc` CLI ([providers.md](providers.md)).
+WSLCC does **not** invoke the Docker Compose plugin. Its own engine drives either the plain `docker` CLI or the hybrid WSLc managed-API/session-scoped-CLI provider ([providers.md](providers.md)).
 
 <a id="sec-1-2"></a>
 ### 1.2 How this relates to compatibility.md
@@ -64,7 +64,7 @@ Legacy aliases (`#resolution-features`, `#service-reference`, `#profiles`, `#sta
 ## 2 How WSLCC loads a Compose file
 <a id="sec-2-1"></a>
 ### 2.1 Two-stage pipeline
-Resolution uses the single `Wslcc.Compose` library in two stages:
+Resolution uses the single `Wslcc.Compose.Configuration` library in two stages:
 
 1. **Client-side** (`ComposeLoader`, in the CLI): multi-file merge, `.env` + `${VAR}` interpolation, `include` and `extends` expansion, profile filtering — then re-serialize the result as one YAML document.
 2. **Daemon-side** (`ComposeFileParser`): parse that single document into the typed model used by `ComposeEngine`. By this point profiles, `include`, and `extends` no longer exist.
@@ -676,7 +676,7 @@ The long form exists because the short form runs out of room: it is the only way
 
 Publishing is not required for service-to-service traffic: containers on the same network reach each other on the container port directly ([§4.5.2](#sec-4-5-2)).
 
-***WSLCC note:*** only the short syntax is accepted today; a long-form entry fails the load with an explicit error rather than being ignored.
+***WSLCC note:*** short syntax is passed through. Long-form `target`, `published`, `host_ip`, and `protocol` are normalized to equivalent publish syntax; `name`, `mode`, and `app_protocol` have no runtime effect.
 
 <a id="sec-4-5-2"></a>
 #### 4.5.2 `expose`
@@ -728,7 +728,7 @@ Per-network fields:
 
 A service with no `networks:` key joins the application's implicit default network. An empty value under a name (`backend:`) means “join it with no special options”.
 
-***WSLCC note:*** membership is applied, but the per-network option map is not; every service is reachable by its service name, and no `networks:` key means the implicit `<project>_default` network ([§10.1](#sec-10-1)).
+***WSLCC note:*** membership, aliases, and static IPv4 are applied. Every service is also reachable by its service name, and no `networks:` or `network_mode:` key means the implicit `<project>_default` network ([§10.1](#sec-10-1)).
 
 <a id="sec-4-6-2"></a>
 #### 4.6.2 `network_mode`
@@ -1005,7 +1005,7 @@ restart: unless-stopped
 
 Quote `no` — bare `no` is parsed by YAML as the boolean `false`. For one-shot jobs, keep the default so a successful run does not loop. `unless-stopped` is usually the right choice for long-lived services on a developer machine.
 
-***WSLCC note:*** the value is passed straight through as `--restart`; the preview `wslc` backend may reject the flag ([providers.md](providers.md)).
+***WSLCC note:*** the Docker provider passes the value through as `--restart`. WSLc 3.0.1 has a restart command but no persistent restart-policy API/flag, so its provider rejects this setting ([providers.md](providers.md)).
 
 <a id="sec-4-9-2"></a>
 #### 4.9.2 `stop_grace_period`
@@ -1243,7 +1243,7 @@ volumes:
 
 This turns "the attacker wrote a binary into the image" into an immediate failure, and it makes the container's writable surface explicit. Most images need a few writable paths anyway, so pair it with `tmpfs:` ([§4.7.3](#sec-4-7-3)) for scratch space and named volumes for anything that must persist.
 
-***WSLCC note:*** `read_only: true` is emitted as `--read-only`. Writable paths still need bind or named volumes, or `tmpfs:` / long-form `type: tmpfs` (both applied as `--tmpfs`).
+***WSLCC note:*** the Docker provider emits `--read-only`. WSLc 3.0.1 has no equivalent managed property or CLI flag, so its provider rejects this setting. Writable paths still need bind or named volumes, or `tmpfs:` / long-form `type: tmpfs`.
 
 <a id="sec-4-11-6"></a>
 #### 4.11.6 `userns_mode`
@@ -1980,7 +1980,7 @@ networks:
 
 `internal: true` is the clean way to isolate a database tier: give the database an internal network plus a shared one with the API, and it becomes unreachable from outside without any firewall rules. Declaring an `ipam.config.subnet` is a prerequisite for pinning a service to a fixed `ipv4_address` ([§4.6.1](#sec-4-6-1)).
 
-***WSLCC note:*** only `driver` and `external` are modeled; the attributes above are accepted by the parser and have no effect. Support detail: [compatibility.md](compatibility.md).
+***WSLCC note:*** `driver`, `external`, `internal`, `driver_opts`, and the first IPAM config's subnet/gateway/IP range are applied. Support detail: [compatibility.md](compatibility.md).
 
 <a id="sec-6"></a>
 ## 6 Volumes (top-level)
@@ -2040,7 +2040,7 @@ volumes:
 
 The `local` driver plus `driver_opts` is more capable than it looks: as shown above it can bind a specific host directory or mount an NFS export, giving you a named volume backed by storage you control.
 
-***WSLCC note:*** only `driver` and `external` are modeled. Support detail: [compatibility.md](compatibility.md).
+***WSLCC note:*** `driver`, `external`, and `driver_opts` are applied. Support detail: [compatibility.md](compatibility.md).
 
 <a id="sec-7"></a>
 ## 7 Configs (top-level)

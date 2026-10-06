@@ -2,7 +2,7 @@
 
 High-level direction and **milestones**. Fine-grained deferred work lives only in [todo.md](todo.md) — do not duplicate items here. How work is tracked in GitHub is in [CONTRIBUTING.md](../CONTRIBUTING.md#planning-and-issues).
 
-**Maturity:** public-preview / pre-1.0 on `main`. No tagged GitHub Release or winget publication yet. Expect breaking changes until 1.0. Not production-ready.
+**Maturity:** pre-1.0 on `main`. WSL containers are GA; WSLCC has no tagged GitHub Release or winget publication yet. Expect breaking changes until 1.0. Not production-ready.
 
 Effort labels used below: **S** ≤ ~1 day, **M** ~few days, **L** multi-week.
 
@@ -64,7 +64,7 @@ Not sequenced against each other; each should be an issue (or epic issue) before
 | WinUI3 GUI over `wslccd` gRPC                           | **L** | [todo.md § GUI](todo.md#gui)                               |
 | Managed API NuGet (`Wslcc.Api`)                         | **M** | [todo.md § Managed API](todo.md#managed-api-nuget-package) |
 | Machine-wide service via MSI                            | **L** | today: per-user HKCU Run only                              |
-| WSL provider on `Microsoft.WSL.Containers` (`WSLC_SDK`) | **L** | [todo.md § WSL provider](todo.md#wsl-provider)             |
+| Reduce WSLc CLI fallback as managed API gaps close       | **M** | [todo.md § WSL provider](todo.md#wsl-provider)             |
 
 
 

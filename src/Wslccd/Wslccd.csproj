@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
   <ItemGroup>
-    <ProjectReference Include="..\Wslcc.Core\Wslcc.Core.csproj" />
+    <ProjectReference Include="..\Wslcc.Compose.Engine\Wslcc.Compose.Engine.csproj" />
     <ProjectReference Include="..\Wslcc.Grpc.Server\Wslcc.Grpc.Server.csproj" />
     <ProjectReference Include="..\Wslcc.Grpc.Contracts\Wslcc.Grpc.Contracts.csproj" />
     <ProjectReference Include="..\Wslcc.Providers.Wslc\Wslcc.Providers.Wslc.csproj" />
@@ -14,7 +14,8 @@
   </ItemGroup>
 
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFramework>net10.0-windows10.0.26100.0</TargetFramework>
+    <PlatformTarget>x64</PlatformTarget>
     <AssemblyName>wslccd</AssemblyName>
     <RootNamespace>Wslccd</RootNamespace>
   </PropertyGroup>

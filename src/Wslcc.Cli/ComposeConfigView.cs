@@ -1,4 +1,4 @@
-using Wslcc.Compose;
+using Wslcc.Compose.Configuration;
 
 namespace Wslcc.Cli;
 

@@ -2,8 +2,8 @@ using System.Globalization;
 using Grpc.Core;
 using Wslcc.Abstractions;
 using Wslcc.Abstractions.Compose;
-using Wslcc.Compose;
-using Wslcc.Core;
+using Wslcc.Compose.Configuration;
+using Wslcc.Compose.Engine;
 using Wslcc.Grpc.Contracts;
 
 namespace Wslcc.Grpc.Server;

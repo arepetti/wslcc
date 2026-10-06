@@ -2,11 +2,11 @@
 
 `wslcc` brings a `docker compose`-style workflow to Microsoft's [WSL containers](https://learn.microsoft.com/en-us/windows/wsl/wsl-container) feature. It fills the gap of a missing `compose` command in `wslc`, and it can also drive the Docker CLI so you have a single, unified interface across both backends — locally or (with optional **HTTPS + bearer token**) on a remote machine.
 
-> Status: early public-preview era tooling. WSL containers themselves are in public preview (2026); install with `wsl --update --pre-release`. Expect rough edges and breaking changes. Not production-ready.
+> Status: WSL containers are generally available in WSL 3.0.1. WSLCC itself is pre-1.0; expect breaking changes and do not treat it as production-ready yet.
 
 ## Install
 
-**Prerequisites:** Windows x64 with WSL pre-release (`wsl --update --pre-release`). Optionally Docker, for the `docker` provider.
+**Prerequisites:** Windows x64 with current WSL (`wsl --update`; WSL 3.0.1 or newer recommended). Optionally Docker, for the `docker` provider.
 
 There is **no tagged release yet** (packaging and winget manifests exist for when one is cut — see [docs/roadmap.md](docs/roadmap.md) milestone 0.2). Until then, build from source with the .NET 10 SDK:
 
@@ -23,15 +23,15 @@ Before removing an installed build, unregister autostart if you used it: `wslcc 
 
 - `wslcc` — the command-line tool. Mirrors `docker compose ...` under a `compose` branch (`wslcc compose up`, `wslcc compose ps`, ...), plus `wslcc daemon ...` and `wslcc version`.
 - `wslccd` — a small background daemon exposing a gRPC service (named pipe locally; optional **HTTPS** for remote). Runs as a per-user process, on demand or started automatically at logon.
-- A provider-agnostic core library, plus providers for **WSL containers** (`wslc`) and **Docker** (`docker`).
+- A provider-agnostic Compose engine, plus providers for **WSL containers** (`wslc`) and **Docker** (`docker`).
 
 ```mermaid
 graph LR
   cli["wslcc (CLI)"] -->|gRPC over npipe/http| daemon["wslccd (daemon)"]
   gui["GUI (WinUI3, future)"] -.->|gRPC| daemon
-  daemon --> core["Core engine"]
-  core --> wslc["Provider: WSL containers"]
-  core --> docker["Provider: Docker"]
+  daemon --> engine["Compose engine"]
+  engine --> wslc["Provider: WSL containers"]
+  engine --> docker["Provider: Docker"]
 ```
 
 ## Quick start
@@ -61,7 +61,7 @@ wslcc compose version --wslcc-provider docker         # target a specific provid
 - `src/` — C# source (libraries, providers, daemon, CLI).
 - `tests/` — unit tests.
 - `docs/` — see [docs/README.md](docs/README.md) for the index (architecture, CLI/daemon/compose references, [compatibility](docs/compatibility.md), [troubleshooting](docs/troubleshooting.md), roadmap).
-- `examples/` — sample compose projects (start with [examples/web-redis](examples/web-redis)).
+- `examples/` — sample compose projects (start with [examples/web-redis](examples/web-redis), or [examples/mongo-ui](examples/mongo-ui) for a database plus a browser UI).
 
 Coming from `docker compose`? Start with [docs/compatibility.md](docs/compatibility.md). See [docs/architecture.md](docs/architecture.md) for the full picture and [docs/todo.md](docs/todo.md) for what's next (including a planned managed API NuGet package and a WinUI3 GUI). Contributors building from source need the .NET 10 SDK — see [CONTRIBUTING.md](CONTRIBUTING.md).
 

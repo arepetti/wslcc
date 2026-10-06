@@ -21,7 +21,6 @@ Intentionally deferred work. **Milestones and sequencing** live in [roadmap.md](
 
 | Item | Priority | Size | Milestone | Issue | Notes |
 | --- | --- | --- | --- | --- | --- |
-| Structured `ports` long map form | **P2** | **M** | Later | | Ports long form still rejected; volumes long form (`volume`/`bind`/`tmpfs`) is applied |
 | `configs` | **P2** | **M** | Later | | Same file-grant model as secrets; default target `/<name>`; `content:` source |
 | `deploy` | **P2** | **L** | Later | | Not read |
 | Multi-file unique-key merge for list attributes (Compose long-form ports/volumes by target) | **P2** | **M** | Later | | Exact-dedup only today |
@@ -32,13 +31,39 @@ Intentionally deferred work. **Milestones and sequencing** live in [roadmap.md](
 | --- | --- | --- | --- | --- | --- |
 | `config --resolve-image-digests` | **P2** | **M** | Later | | Needs registry access; `config` is offline |
 | `logs --follow` global ordering (bounded reorder / watermark) | **P2** | **M** | Later | | Non-follow dumps already sort by timestamp |
-| Networks/volumes: IPAM, `ipv4_address`, `driver_opts`, explicit resource `name:` | **P2** | **M** | Later | | Only `driver` / `external` today |
+| Explicit network/volume resource `name:` | **P2** | **S** | Later | | Driver options and network IPAM/static IPv4 now ship |
 
 ## WSL provider
 
 | Item | Priority | Size | Milestone | Issue | Notes |
 | --- | --- | --- | --- | --- | --- |
-| Enable `WSLC_SDK` and move to `Microsoft.WSL.Containers`; remove CLI fallback | **P2** | **L** | Later | | Gated on SDK API parity |
+| Migrate CLI-backed operations when the managed API gains parity | **P2** | **M** | Later | | The 3.0.1 hybrid provider already uses the SDK wherever its metadata and discovery model is sufficient |
+
+### WSLc 3.0.1 CLI-only capabilities
+
+These are intentionally tracked so a future SDK release can replace each CLI call independently:
+
+- Image builds, including build arguments, targets, labels, no-cache, pull, and secrets.
+- Container labels and label-based container discovery/config-hash lookup.
+- Container, network, and volume listing/filtering.
+- Retained log retrieval (`follow`, `tail`, `since`, and timestamps); SDK process streams are live-only.
+- Healthcheck configuration and health-state discovery.
+- User selection, DNS, per-container CPU/memory limits, shared-memory size, TTY, ulimits, tmpfs/advanced mounts, and persistent stop defaults.
+- Named/custom network lifecycle, multiple networks, aliases, static IPv4, IPAM, internal networks, and driver options.
+- Generic volume lifecycle, labels, drivers, and driver options.
+
+All fallback calls must remain scoped to the SDK-owned `wslcc` session with the global `--session` option. WSLc output must use the dedicated JSON parser; Docker Go templates are not compatible.
+
+### Blocked by WSLc 3.0.1
+
+Neither the managed API nor CLI can currently provide these faithfully:
+
+- OCI annotations, restart policies, or a read-only root filesystem.
+- Capability/security/user-namespace controls.
+- Generic devices, block-I/O and extended resource controls, OOM/PID limits, sysctls, alternate runtimes, or custom logging drivers.
+- Host networking, static IPv6, custom MAC addresses, extra host entries, and attachable-network semantics.
+- PID/IPC/UTS namespace controls, init shims, supplementary groups, and `volumes_from`.
+- `npipe`, `cluster`, and image mounts, plus external Compose config/secret stores.
 
 ## Managed API NuGet package
 

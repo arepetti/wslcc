@@ -16,6 +16,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <WindowsSdkPackageVersion>10.0.26100.80</WindowsSdkPackageVersion>
 
     <Authors>Adriano Repetti</Authors>
     <Company>Adriano Repetti</Company>

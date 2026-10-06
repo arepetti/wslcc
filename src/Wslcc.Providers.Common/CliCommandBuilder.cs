@@ -1,19 +1,19 @@
 using System.Globalization;
 using System.Text;
+using System.Text.RegularExpressions;
 using Wslcc.Abstractions;
 using Wslcc.Abstractions.Compose;
 
 namespace Wslcc.Providers.Common;
 
 /// <summary>
-/// Builds argument strings for the standard container CLIs (docker, wslc, ...). Kept separate and
-/// pure so it can be unit-tested without invoking a process.
+/// Builds Docker-compatible argument strings. WSLc reuses individual compatible builders but owns a
+/// separate dialect for JSON listing, session scoping, aliases, and capability validation.
 /// </summary>
 /// <remarks>
 /// Every method returns a single argument string with each token quoted as needed, ready to hand to
-/// <see cref="ProcessRunner"/> — the executable name is the caller's business, since the same arguments
-/// work across CLIs. Listing commands filter on the <see cref="WslccLabels"/> keys, so they only ever
-/// see wslcc-managed resources.
+/// <see cref="ProcessRunner"/>. Listing commands filter on the <see cref="WslccLabels"/> keys, so they
+/// only ever see wslcc-managed resources.
 /// </remarks>
 /// <example>
 /// Running a container and then reading its logs:
@@ -112,6 +112,14 @@ public static class CliCommandBuilder
             args.Add("--network-alias");
             args.Add(spec.NetworkAlias!);
         }
+
+        foreach (var alias in spec.NetworkAliases.Where(alias => !string.Equals(alias, spec.NetworkAlias, StringComparison.Ordinal)))
+        {
+            args.Add("--network-alias");
+            args.Add(alias);
+        }
+
+        AddOption(args, "--ip", spec.NetworkIPv4Address);
     }
 
     /// <summary>
@@ -254,6 +262,27 @@ public static class CliCommandBuilder
         AddOption(args, "-w", spec.WorkingDir);
         // Compose file — hostname: container UTS name (--hostname).
         AddOption(args, "--hostname", spec.Hostname);
+        AddOption(args, "--domainname", spec.DomainName);
+        AddOption(args, "--gpus", spec.Gpus);
+        AddOption(args, "--cpus", spec.Cpus);
+        AddOption(args, "--memory", spec.MemoryLimit);
+        AddOption(args, "--shm-size", spec.ShmSize);
+        AddOption(args, "--stop-signal", spec.StopSignal);
+        AddOption(args, "--stop-timeout", DurationToSeconds(spec.StopGracePeriod));
+
+        foreach (var dns in spec.Dns)
+            AddOption(args, "--dns", dns);
+        foreach (var option in spec.DnsOptions)
+            AddOption(args, "--dns-option", option);
+        foreach (var search in spec.DnsSearch)
+            AddOption(args, "--dns-search", search);
+        foreach (var limit in spec.Ulimits)
+            AddOption(args, "--ulimit", $"{limit.Key}={limit.Value}");
+
+        if (spec.StdinOpen)
+            args.Add("-i");
+        if (spec.Tty)
+            args.Add("-t");
 
         if (spec.ReadOnly)
             args.Add("--read-only");
@@ -354,6 +383,24 @@ public static class CliCommandBuilder
             args.Add(arg.Value is null ? arg.Key : $"{arg.Key}={arg.Value}");
         }
 
+        foreach (var label in spec.Labels)
+        {
+            args.Add("--label");
+            args.Add($"{label.Key}={label.Value}");
+        }
+
+        if (spec.NoCache)
+            args.Add("--no-cache");
+
+        if (spec.Pull)
+            args.Add("--pull");
+
+        foreach (var secret in spec.Secrets)
+        {
+            args.Add("--secret");
+            args.Add(secret);
+        }
+
         args.Add(spec.Context);
 
         return Join(args);
@@ -445,6 +492,19 @@ public static class CliCommandBuilder
             args.Add($"{label.Key}={label.Value}");
         }
 
+        foreach (var option in spec.DriverOptions)
+        {
+            args.Add("--opt");
+            args.Add($"{option.Key}={option.Value}");
+        }
+
+        if (spec.Internal)
+            args.Add("--internal");
+
+        AddOption(args, "--subnet", spec.Subnet);
+        AddOption(args, "--gateway", spec.Gateway);
+        AddOption(args, "--ip-range", spec.IpRange);
+
         args.Add(spec.Name);
         return Join(args);
     }
@@ -477,17 +537,23 @@ public static class CliCommandBuilder
     /// <param name="alias">Alias to publish on the network; <c>null</c>/blank emits no <c>--alias</c>.</param>
     /// <returns>The quoted argument string, starting with <c>network connect</c>.</returns>
     /// <exception cref="ArgumentException"><paramref name="network"/> or <paramref name="container"/> is null, empty or whitespace.</exception>
-    public static string BuildNetworkConnectArguments(string network, string container, string? alias)
+    public static string BuildNetworkConnectArguments(
+        string network,
+        string container,
+        IReadOnlyList<string>? aliases,
+        string? ipv4Address)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(network);
         ArgumentException.ThrowIfNullOrWhiteSpace(container);
 
         var args = new List<string> { "network", "connect" };
-        if (!string.IsNullOrWhiteSpace(alias))
+        foreach (var alias in aliases ?? Array.Empty<string>())
         {
             args.Add("--alias");
-            args.Add(alias!);
+            args.Add(alias);
         }
+
+        AddOption(args, "--ip", ipv4Address);
 
         args.Add(network);
         args.Add(container);
@@ -529,6 +595,12 @@ public static class CliCommandBuilder
         {
             args.Add("--label");
             args.Add($"{label.Key}={label.Value}");
+        }
+
+        foreach (var option in spec.DriverOptions)
+        {
+            args.Add("--opt");
+            args.Add($"{option.Key}={option.Value}");
         }
 
         args.Add(spec.Name);
@@ -680,5 +752,36 @@ public static class CliCommandBuilder
 
         sb.Append('"');
         return sb.ToString();
+    }
+
+    private static string? DurationToSeconds(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return null;
+
+        if (int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var seconds))
+            return seconds.ToString(CultureInfo.InvariantCulture);
+
+        var matches = Regex.Matches(value, @"(?<value>\d+(?:\.\d+)?)(?<unit>ms|us|ns|h|m|s)");
+        if (matches.Count == 0 || string.Concat(matches.Select(match => match.Value)) != value)
+            return value;
+
+        var totalSeconds = 0d;
+        foreach (Match match in matches)
+        {
+            var amount = double.Parse(match.Groups["value"].Value, CultureInfo.InvariantCulture);
+            totalSeconds += match.Groups["unit"].Value switch
+            {
+                "h" => amount * 3600,
+                "m" => amount * 60,
+                "s" => amount,
+                "ms" => amount / 1000,
+                "us" => amount / 1_000_000,
+                "ns" => amount / 1_000_000_000,
+                _ => 0,
+            };
+        }
+
+        return Math.Ceiling(totalSeconds).ToString(CultureInfo.InvariantCulture);
     }
 }

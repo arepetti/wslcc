@@ -96,11 +96,17 @@ public interface IContainerProvider
     /// <summary>Connects an already-running container to an additional network, optionally with an alias.</summary>
     /// <param name="network">Network to connect to.</param>
     /// <param name="container">Container to connect.</param>
-    /// <param name="alias">Alias to publish on the network, usually the service name; <c>null</c> for none.</param>
+    /// <param name="aliases">Aliases to publish on the network.</param>
+    /// <param name="ipv4Address">Static IPv4 address, or <c>null</c> for dynamic assignment.</param>
     /// <param name="cancellationToken">Cancels the operation.</param>
     /// <exception cref="ArgumentException"><paramref name="network"/> or <paramref name="container"/> is null, empty or whitespace.</exception>
     /// <exception cref="ProviderException">The container could not be connected.</exception>
-    Task ConnectNetworkAsync(string network, string container, string? alias, CancellationToken cancellationToken = default);
+    Task ConnectNetworkAsync(
+        string network,
+        string container,
+        IReadOnlyList<string>? aliases,
+        string? ipv4Address,
+        CancellationToken cancellationToken = default);
 
     /// <summary>Names of the networks labelled for the project (those wslcc created for it).</summary>
     /// <param name="projectName">Project to scope to.</param>

@@ -98,12 +98,19 @@ public abstract class CliContainerProviderBase : IContainerProvider
     }
 
     /// <inheritdoc/>
-    public async Task ConnectNetworkAsync(string network, string container, string? alias, CancellationToken cancellationToken = default)
+    public async Task ConnectNetworkAsync(
+        string network,
+        string container,
+        IReadOnlyList<string>? aliases,
+        string? ipv4Address,
+        CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(network);
         ArgumentException.ThrowIfNullOrWhiteSpace(container);
 
-        var result = await TryRunAsync(CliCommandBuilder.BuildNetworkConnectArguments(network, container, alias), cancellationToken)
+        var result = await TryRunAsync(
+                CliCommandBuilder.BuildNetworkConnectArguments(network, container, aliases, ipv4Address),
+                cancellationToken)
             .ConfigureAwait(false);
         EnsureSuccess(result, $"connect container '{container}' to network '{network}'");
     }

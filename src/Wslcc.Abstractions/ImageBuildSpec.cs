@@ -22,6 +22,14 @@ public sealed class ImageBuildSpec
     /// </summary>
     public IDictionary<string, string?> Args { get; } = new Dictionary<string, string?>(StringComparer.Ordinal);
 
+    public IDictionary<string, string> Labels { get; } = new Dictionary<string, string>(StringComparer.Ordinal);
+
+    public bool NoCache { get; set; }
+
+    public bool Pull { get; set; }
+
+    public IList<string> Secrets { get; } = new List<string>();
+
     /// <summary>Tag to apply to the built image, e.g. "&lt;project&gt;-&lt;service&gt;".</summary>
     public string Tag { get; set; } = string.Empty;
 }

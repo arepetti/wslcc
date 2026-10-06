@@ -50,18 +50,18 @@ No compose file found. Use -f <path> or run from a directory containing compose.
 
 `wslcc version` (or `compose version`) shows a provider as unavailable when its tool is missing or unreachable.
 
-- **`wslc`:** install/update WSL pre-release (`wsl --update --pre-release`) so `wslc` is on `PATH`.
+- **`wslc`:** install/update WSL (`wsl --update`; WSL 3.0.1 or newer recommended). WSLCC also needs the `Microsoft.WSL.Containers` 3.0.1 runtime shipped with the app.
 - **`docker`:** install Docker and ensure `docker` works in the same session.
 - Override for one command: `wslcc compose … --wslcc-provider docker` (or `wslc`). Set the daemon default with `wslcc daemon start --provider …`.
 
-## Long-form `ports:` rejected / unsupported volume types
+## Unsupported volume types or provider options
 
 ```text
-service '…': 'ports' long map form is not supported; use short syntax …
 service '…': volume type 'npipe' is not supported (supported: volume, bind, tmpfs)
+The WSLc 3.0.1 provider does not support a read-only root filesystem.
 ```
 
-`ports:` still accepts short syntax only (`"8080:80"`). Service `volumes:` accept short syntax and long-form `type: volume` / `bind` / `tmpfs`; `npipe` / `cluster` / `image` fail loudly. See [compose-file.md §4.5.1](compose-file.md#sec-4-5-1) / [§4.7.1](compose-file.md#sec-4-7-1) and [compatibility.md](compatibility.md#what-partial-means-key-by-key).
+`ports:` accepts short syntax and the long map fields `target`, `published`, `host_ip`, and `protocol`. Service `volumes:` accept short syntax and long-form `type: volume` / `bind` / `tmpfs`; `npipe` / `cluster` / `image` fail loudly. WSLc also rejects provider capabilities it does not expose instead of silently ignoring them. See [compose-file.md §4.5.1](compose-file.md#sec-4-5-1) / [§4.7.1](compose-file.md#sec-4-7-1) and [compatibility.md](compatibility.md#what-partial-means-key-by-key).
 
 ## Wrong values from `.env`
 

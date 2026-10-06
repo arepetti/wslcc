@@ -13,6 +13,8 @@ public sealed class VolumeCreateSpec
     /// <summary>Volume driver to use; <c>null</c> leaves the provider's default.</summary>
     public string? Driver { get; set; }
 
+    public IDictionary<string, string> DriverOptions { get; } = new Dictionary<string, string>(StringComparer.Ordinal);
+
     /// <summary>
     /// Labels applied at creation time, including the <see cref="WslccLabels.Project"/> key that lets
     /// <c>down --volumes</c> find the volumes wslcc created for the project.

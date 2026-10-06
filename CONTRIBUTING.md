@@ -4,7 +4,7 @@ Thanks for your interest! WSLCC is a single-maintainer, spare-time project (see 
 
 ## Prerequisites
 
-- Windows 10/11 with the WSL **pre-release** for WSL containers: `wsl --update --pre-release`.
+- Windows 10/11 with current WSL containers support: `wsl --update` (WSL 3.0.1 or newer recommended).
 - [.NET 10 SDK](https://dotnet.microsoft.com/) (see [`global.json`](global.json) for the pinned version).
 - Optional: Docker, for the `docker` provider and for testing without WSL containers.
 
@@ -28,8 +28,8 @@ App binaries land side-by-side in `src\out\` (see [`Directory.Build.props`](Dire
 - Central Package Management: add/adjust NuGet versions in [`Directory.Packages.props`](Directory.Packages.props); reference packages without a `Version`.
 - Shared build settings live in [`Directory.Build.props`](Directory.Build.props) (including `Nullable` enable). Style preferences are suggested via [`.editorconfig`](.editorconfig) (file-scoped namespaces, 4-space indent, etc.) at suggestion severity — they are **not** enforced in CI today (`TreatWarningsAsErrors` is off; there is no `dotnet format --verify` step).
 - **C# readability conventions** that go beyond defaults (brace omission, `is null`, short methods, XML docs, Compose-file citations) are documented in [`docs/style-guide.md`](docs/style-guide.md) — follow that in reviews.
-- Every project targets `net10.0` (no `netstandard2.0` compatibility is maintained).
-- The WSL SDK path is isolated behind the `WSLC_SDK` compile constant so the solution builds without the preview `Microsoft.WSL.Containers` package. Prefer that seam over sprinkling `#if` throughout.
+- Cross-platform libraries target `net10.0`; the WSL provider, daemon, and their tests target `net10.0-windows10.0.26100.0`. No `netstandard2.0` compatibility is maintained.
+- The WSL provider references `Microsoft.WSL.Containers` 3.0.1 directly. Keep managed operations behind `IWslcClient` and CLI-only operations in the dedicated WSLc dialect.
 - Comments should explain intent/trade-offs, not restate the code.
 
 ## Planning and issues

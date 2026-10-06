@@ -3,12 +3,25 @@ using Wslcc.Abstractions;
 namespace Wslcc.Providers.Wslc;
 
 /// <summary>
-/// Thin seam over the WSL containers tooling. Two implementations exist: one backed by the
-/// <c>Microsoft.WSL.Containers</c> SDK (gated behind the <c>WSLC_SDK</c> compile constant) and one
-/// that shells out to <c>wslc.exe</c>. This split keeps the CLI fallback isolated so it can be
-/// removed once the SDK reaches API parity.
+/// Testable seam over the operations exposed by the <c>Microsoft.WSL.Containers</c> managed API.
+/// Operations missing from that API are deliberately kept in the provider's session-scoped CLI
+/// fallback rather than being hidden behind this contract.
 /// </summary>
-public interface IWslcClient
+public interface IWslcClient : IDisposable
 {
     Task<ProviderInfo> GetProviderInfoAsync(CancellationToken cancellationToken = default);
+
+    Task EnsureSessionAsync(CancellationToken cancellationToken = default);
+
+    Task EnsureImageAsync(string image, bool alwaysPull, CancellationToken cancellationToken = default);
+
+    Task<bool> ImageExistsAsync(string image, CancellationToken cancellationToken = default);
+
+    Task StartContainerAsync(string container, CancellationToken cancellationToken = default);
+
+    Task StopContainerAsync(string container, CancellationToken cancellationToken = default);
+
+    Task RemoveContainerAsync(string container, bool force, CancellationToken cancellationToken = default);
+
+    Task<ContainerRuntimeState?> GetContainerStateAsync(string container, CancellationToken cancellationToken = default);
 }
